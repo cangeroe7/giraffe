@@ -12,6 +12,7 @@ type Layer interface {
   Biases() u.Matrix
   WeightsGradient() u.Matrix
   BiasesGradient() u.Matrix
+  Type() string
 }
 
 

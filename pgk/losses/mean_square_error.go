@@ -21,24 +21,26 @@ func (l *meanSquareError) CalcLoss(yTrue, yPred u.Matrix) (float64, error) {
 	diffs, _ := yTrue.Subtract(yPred, false)
 	squaredDiffs, _ := diffs.Multiply(diffs, true)
 
-	sum := squaredDiffs.Sum()
-	size := squaredDiffs.Size()
+  avg := squaredDiffs.Avg()
 
-	return sum / float64(size), nil
+  return avg, nil
 }
 
 func (l *meanSquareError) Accuracy(yTrue, yPred u.Matrix) (float64, error) {
 	round := func(x float64) (float64, error) {
 		return math.Round(x), nil
 	}
+
 	predicted, _ := yPred.Map(round, false)
 	predicted.Add(yTrue, true)
+
 	correct := func(x float64) (float64, error) {
 		if x == 2.0 || x == 0.0 {
 			return 1.0, nil
 		}
 		return 0.0, nil
 	}
+
 	predicted.Map(correct, true)
 	sum := predicted.Sum()
 	return sum / float64(predicted.Size()), nil

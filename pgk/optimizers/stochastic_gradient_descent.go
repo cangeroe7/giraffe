@@ -20,6 +20,9 @@ func (o *SGD) Initialize() error {
 }
 
 func (o *SGD) Apply(key string, param, gradient u.Matrix) error {
+  if param == nil || gradient == nil {
+    return nil
+  }
 
   scaledGradient := gradient.ScalarMultiply(o.LearningRate, false)
 

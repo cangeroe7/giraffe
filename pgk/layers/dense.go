@@ -23,6 +23,10 @@ func Dense(units int, activation string) Layer {
 	return &dense{units: units, activation: activationFunc}
 }
 
+func (d *dense) Type() string {
+  return "dense"
+}
+
 func (d *dense) CompileLayer(inShape []int) ([]int, error) {
 	var limit float64
 	if d.activation.Type() == "relu" {
@@ -103,33 +107,3 @@ func (d *dense) Weights() u.Matrix {
 func (d *dense) Biases() u.Matrix {
   return d.biases
 }
-
-	// Adjust Weights
-	// weights gradient = gradient * (input transposed)
-	// adjusted weights = oldWeights - learningRate * weightGradient
-	//inputT := d.input.Transpose()
-
-	//weightsGradient, err := inputT.MatMul(deactiveGradient)
-	//if err != nil {
-	//	fmt.Printf("err weights gradient: %v\n", err)
-	//	return nil, err
-	//}
-	// TODO: something with reps so the two things will multiply
-
-	//d.weights.Add(weightsGradient.ScalarMultiply(-learningRate, false), false)
-
-	// Adjust Biases
-	// biases gradient = gradient
-	// adjusted biases = oldbiases - learningRate * biases gradient
-	//biasGradient, err := deactiveGradient.SumAxis(0)
-	//if err != nil {
-	//	fmt.Printf("err bias change: %v\n", err)
-	//	return nil, err
-	//}
-
-	//d.biases.Add(biasGradient.ScalarMultiply(-learningRate, false), false)
-
-	// Create Output Gradient
-	// output gradient = gradient * (weights transposed)
-
-

@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"math"
 
 	u "github.com/cangeroe7/giraffe/internal/utils"
 	la "github.com/cangeroe7/giraffe/pgk/layers"
@@ -18,13 +19,13 @@ type Model interface {
 }
 
 type sequential struct {
-	layers    []la.Layer
-	optimizer o.Optimizer
-	loss      lo.Loss
-	batchSize int
-	epochs    int
-	history   map[string]([]float64)
-  normalizer u.Normalizer
+	layers     []la.Layer
+	optimizer  o.Optimizer
+	loss       lo.Loss
+	batchSize  int
+	epochs     int
+	history    map[string]([]float64)
+	normalizer u.Normalizer
 }
 
 func Sequential(layers ...la.Layer) *sequential {
@@ -56,19 +57,19 @@ func (s *sequential) Compile(inputShape []int, loss string, optimizer o.Optimize
 	// TODO: Initialize the metrics that we want to keep track off
 	// TODO: Set up the optimizer for the model
 
-  // Set optimzers; stochatic gradient descent as default
-  if optimizer == nil {
-    optimizer = &o.SGD{}
-  }
-  s.optimizer = optimizer
-  s.optimizer.Initialize()
+	// Set optimzers; stochatic gradient descent as default
+	if optimizer == nil {
+		optimizer = &o.SGD{}
+	}
+	s.optimizer = optimizer
+	s.optimizer.Initialize()
 
 	return nil
 }
 
 func (s *sequential) Fit(xTrain, yTrain [][]float64, batchSize, epochs int, normalize bool) error {
 	if normalize {
-    s.normalizer.SetFeatures(&xTrain)
+		s.normalizer.SetFeatures(&xTrain)
 		s.normalizer.NormalizeData(&xTrain)
 	}
 
@@ -133,13 +134,13 @@ func (s *sequential) Fit(xTrain, yTrain [][]float64, batchSize, epochs int, norm
 			// Update weights and biases for each layer
 			for i, layer := range s.layers {
 				s.optimizer.Apply(fmt.Sprintf("layer%d_weights", i+1), layer.Weights(), layer.WeightsGradient())
-				s.optimizer.Apply(fmt.Sprintf("layer%d_weights", i+1), layer.Biases(), layer.BiasesGradient())
+				s.optimizer.Apply(fmt.Sprintf("layer%d_biases", i+1), layer.Biases(), layer.BiasesGradient())
 			}
 		}
 
 		// Append the loss and accuracy metrics
-		s.history["loss"] = append(s.history["loss"], totalLoss/float64(numBatches))
-		s.history["accuracy"] = append(s.history["accuracy"], totalAccuracy/float64(numBatches))
+		s.history["loss"] = append(s.history["loss"], math.Round((totalLoss * 10000)/float64(numBatches))/10000)
+		s.history["accuracy"] = append(s.history["accuracy"], math.Round((totalAccuracy * 10000)/float64(numBatches))/10000)
 	}
 
 	return nil
@@ -152,10 +153,10 @@ func (s *sequential) History(metrics ...string) map[string][]float64 {
 }
 
 func (s *sequential) Evaluate(data *[][]float64) (u.Matrix, error) {
-  // Normalize data if normalization is used
-  if s.normalizer.Activated {
-    s.normalizer.NormalizeData(data)
-  }
+	// Normalize data if normalization is used
+	if s.normalizer.Activated {
+		s.normalizer.NormalizeData(data)
+	}
 
 	input, err := u.FromMatrix(*data)
 	if err != nil {
@@ -169,6 +170,11 @@ func (s *sequential) Evaluate(data *[][]float64) (u.Matrix, error) {
 			return nil, err
 		}
 	}
+  round := func(x float64) (float64, error) {
+    return math.Round(x * 10000) / 10000, nil
+  }
+
+  _, _= output.Map(round, true)
 
 	return output, nil
 }

@@ -9,19 +9,22 @@ import (
 )
 
 func main() {
-	model := m.Sequential()
 
+	xTrain, yTrain, err := u.LoadCSV("/home/tskraan/giraffe/data/breastcancer/data.csv")
+	columns := len(xTrain[0])
+	shape := []int{1, columns}
+
+	model := m.Sequential()
+  model.Add(l.Input(shape))
+	model.Add(l.Dense(16, "relu"))
 	model.Add(l.Dense(8, "relu"))
 	model.Add(l.Dense(8, "relu"))
 	model.Add(l.Dense(1, "sigmoid"))
 
-	xTrain, yTrain, err := u.LoadCSV("/home/tskraan/giraffe/data/breastcancer/data.csv")
-	columns := len(xTrain[0])
 
-	shape := []int{1, columns}
 
 	loss := "bce"
-	optimizer := o.SGD{LearningRate: 0.01}
+	optimizer := o.Adam{}
 
 	metrics := []string{"accuracy, loss"}
 	model.Compile(shape, loss, &optimizer, metrics)

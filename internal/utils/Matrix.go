@@ -235,7 +235,7 @@ func (m1 *matrix) Subtract(m_2 Matrix, inPlace bool) (Matrix, error) {
 	return &matrix{mat}, nil
 }
 
-func (m *matrix) Map(fn func(float64) (float64, error), inPlace bool) (Matrix, error) {
+func(m *matrix) Map(fn func(float64) (float64, error), inPlace bool) (Matrix, error) {
 
 	rows, cols := len(m.mat), len(m.mat[0])
 
