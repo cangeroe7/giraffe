@@ -5,6 +5,7 @@ import (
 	"math"
 
 	u "github.com/cangeroe7/giraffe/internal/utils"
+	t "github.com/cangeroe7/giraffe/pgk/tensor"
 	la "github.com/cangeroe7/giraffe/pgk/layers"
 	lo "github.com/cangeroe7/giraffe/pgk/losses"
 	o "github.com/cangeroe7/giraffe/pgk/optimizers"
@@ -15,7 +16,7 @@ type Model interface {
 	Compile(inputShape []int, optimizer o.Optimizer, loss string, metrics []string) error
 	Fit(xTrain, yTrain [][]float64, batchSize int, epochs int) error
 	History(metrics ...string) []float64
-	Evaluate(input [][]float64) (u.Matrix, error)
+	Evaluate(input [][]float64) (t.Tensor, error)
 }
 
 type sequential struct {
@@ -86,11 +87,13 @@ func (s *sequential) Fit(xTrain, yTrain [][]float64, batchSize, epochs int, norm
 			start := batch * batchSize
 			end := min(start+batchSize, len(xTrain))
 
-			XBatch, err := u.FromMatrix(xTrain[start:end])
+      subXTrain := xTrain[start:end]
+			XBatch, err := t.TensorFromMatrix(&subXTrain)
 			if err != nil {
 				return err
 			}
-			YBatch, err := u.FromMatrix(yTrain[start:end])
+      subYTrain := yTrain[start:end]
+			YBatch, err := t.TensorFromMatrix(&subYTrain)
 			if err != nil {
 				return err
 			}
@@ -152,13 +155,13 @@ func (s *sequential) History(metrics ...string) map[string][]float64 {
 	return s.history
 }
 
-func (s *sequential) Evaluate(data *[][]float64) (u.Matrix, error) {
+func (s *sequential) Evaluate(data *[][]float64) (t.Tensor, error) {
 	// Normalize data if normalization is used
 	if s.normalizer.Activated {
 		s.normalizer.NormalizeData(data)
 	}
 
-	input, err := u.FromMatrix(*data)
+	input, err := t.TensorFromMatrix(data)
 	if err != nil {
 		return nil, err
 	}

@@ -8,6 +8,7 @@ import (
 	o "github.com/cangeroe7/giraffe/pgk/optimizers"
 )
 
+
 func main() {
 
 	xTrain, yTrain, err := u.LoadCSV("/home/tskraan/giraffe/data/breastcancer/data.csv")
@@ -21,8 +22,6 @@ func main() {
 	model.Add(l.Dense(8, "relu"))
 	model.Add(l.Dense(1, "sigmoid"))
 
-
-
 	loss := "bce"
 	optimizer := o.Adam{}
 
@@ -32,7 +31,7 @@ func main() {
 		fmt.Printf("err: %v\n", err)
 	}
 
-	err = model.Fit(xTrain, yTrain, 32, 100, true)
+	err = model.Fit(xTrain, yTrain, 32, 50, true)
 	if err != nil {
 		fmt.Printf("err: %v\n", err)
 		fmt.Println("fitting messed up")

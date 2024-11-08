@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math"
 
-	u "github.com/cangeroe7/giraffe/internal/utils"
+	t "github.com/cangeroe7/giraffe/pgk/tensor"
 )
 
 type Adam struct {
@@ -13,15 +13,15 @@ type Adam struct {
 	Beta1        float64             // Defaults to 0.999
 	Beta2        float64             // Defaults to 0.9
 	Epsilon      float64             // Defaults to 1e-07
-	MT           map[string]u.Matrix // First moment
-	VT           map[string]u.Matrix // Second moment
+	MT           map[string]t.Tensor // First moment
+	VT           map[string]t.Tensor // Second moment
 	T            int                 // Time step
 }
 
-func (a *Adam) Apply(key string, param, gradient u.Matrix) error {
-  if param == nil || gradient == nil {
-    return nil
-  }
+func (a *Adam) Apply(key string, param, gradient t.Tensor) error {
+	if param == nil || gradient == nil {
+		return nil
+	}
 
 	a.T++
 
@@ -29,32 +29,42 @@ func (a *Adam) Apply(key string, param, gradient u.Matrix) error {
 	if _, ok := a.MT[key]; !ok {
 		shape := param.Shape()
 
-		a.MT[key] = u.ZerosMatrix(shape[0], shape[1])
-		a.VT[key] = u.ZerosMatrix(shape[0], shape[1])
+		a.MT[key] = t.ZerosTensor(shape)
+		a.VT[key] = t.ZerosTensor(shape)
 	}
 
 	mt := a.MT[key]
 	vt := a.VT[key]
 
 	// Update first moment
-	updateMT := func(mt, grad float64) (float64, error) {
+	updateMT := func(vals ...float64) (float64, error) {
+		if len(vals) != 2 {
+			return 0.0, errors.New("Must be 2 values")
+		}
+
+		mt, grad := vals[0], vals[1]
 		return a.Beta1*mt + (1-a.Beta1)*grad, nil
 	}
 
-	newMT, err := mt.MapOnto(updateMT, gradient, true)
+	newMT, err := mt.MapBatch(updateMT, true, gradient)
 	if err != nil {
-    fmt.Printf("err updating mt: %v\n", err)
+		fmt.Printf("err updating mt: %v\n", err)
 		return err
 	}
 
 	//Update second moment
-	updateVT := func(vt, grad float64) (float64, error) {
+	updateVT := func(vals ...float64) (float64, error) {
+		if len(vals) != 2 {
+			return 0.0, errors.New("Must be 2 values")
+		}
+
+		vt, grad := vals[0], vals[1]
 		return a.Beta1*vt + (1-a.Beta1)*grad*grad, nil
 	}
 
-	newVT, err := vt.MapOnto(updateVT, gradient, true)
+	newVT, err := vt.MapBatch(updateVT, true, gradient)
 	if err != nil {
-    fmt.Printf("err updating VT: %v\n", err)
+		fmt.Printf("err updating VT: %v\n", err)
 		return err
 	}
 
@@ -65,7 +75,7 @@ func (a *Adam) Apply(key string, param, gradient u.Matrix) error {
 
 	mtHat, err := newMT.Map(getMTHat, false)
 	if err != nil {
-    fmt.Printf("err getting mthat: %v\n", err)
+		fmt.Printf("err getting mthat: %v\n", err)
 		return err
 	}
 
@@ -76,25 +86,30 @@ func (a *Adam) Apply(key string, param, gradient u.Matrix) error {
 
 	vtHat, err := newVT.Map(getVTHat, false)
 	if err != nil {
-    fmt.Printf("err getting vthat: %v\n", err)
+		fmt.Printf("err getting vthat: %v\n", err)
 		return err
 	}
 
 	// Calculate the scaled and bias-corrected gradient
-	scaleGrad := func(mHat, vHat float64) (float64, error) {
+	scaleGrad := func(vals ...float64) (float64, error) {
+		if len(vals) != 2 {
+			return 0.0, errors.New("Must be 2 values")
+		}
+
+		mHat, vHat := vals[0], vals[1]
 		return a.LearningRate * mHat / (math.Sqrt(vHat) + a.Epsilon), nil
 	}
 
-	scaledGrad, err := mtHat.MapOnto(scaleGrad, vtHat, false)
+	scaledGrad, err := mtHat.MapBatch(scaleGrad, false, vtHat)
 	if err != nil {
-    fmt.Printf("err scaling grad: %v\n", err)
+		fmt.Printf("err scaling grad: %v\n", err)
 		return err
 	}
 
 	// Update the parameter
 	_, err = param.Subtract(scaledGrad, true)
 	if err != nil {
-    fmt.Printf("err updating params: %v\n", err)
+		fmt.Printf("err updating params: %v\n", err)
 		return err
 	}
 
@@ -130,13 +145,13 @@ func (a *Adam) Initialize() error {
 		a.Epsilon = 1e-07
 	}
 
-  if a.MT == nil {
-    a.MT = make(map[string]u.Matrix)
-  }
+	if a.MT == nil {
+		a.MT = make(map[string]t.Tensor)
+	}
 
-  if a.VT == nil {
-    a.VT = make(map[string]u.Matrix)
-  }
+	if a.VT == nil {
+		a.VT = make(map[string]t.Tensor)
+	}
 
 	return nil
 }

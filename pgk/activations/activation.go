@@ -1,12 +1,12 @@
 package activations
 
 import (
-	u "github.com/cangeroe7/giraffe/internal/utils"
+	t "github.com/cangeroe7/giraffe/pgk/tensor"
 )
 
 type Activation interface {
-	Forward(input u.Matrix) (u.Matrix, error)
-  Backward(gradient u.Matrix) (u.Matrix, error)
+	Forward(input t.Tensor) (t.Tensor, error)
+  Backward(gradient t.Tensor) (t.Tensor, error)
   Type() string
 }
 

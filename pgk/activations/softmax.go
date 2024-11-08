@@ -1,21 +1,21 @@
 package activations
 
 import (
-	u "github.com/cangeroe7/giraffe/internal/utils"
+	t "github.com/cangeroe7/giraffe/pgk/tensor"
 	"math"
 )
 
 func Softmax() Activation { return &softmax{} }
 
 type softmax struct {
-	output u.Matrix
+	output t.Tensor
 }
 
 func (a *softmax) Type() string {
   return "softmax"
 }
 
-func (a *softmax) Forward(input u.Matrix) (u.Matrix, error) {
+func (a *softmax) Forward(input t.Tensor) (t.Tensor, error) {
 	maxVal := input.Max()
 	softmax := func(x float64) (float64, error) {
 		return math.Exp(x - maxVal), nil
@@ -36,13 +36,13 @@ func (a *softmax) Forward(input u.Matrix) (u.Matrix, error) {
 	return output, nil
 }
 
-func (a *softmax) Backward(gradient u.Matrix) (u.Matrix, error) {
+func (a *softmax) Backward(gradient t.Tensor) (t.Tensor, error) {
 	shape := a.output.Shape()
 	size := shape[0] * shape[1]
 
-	M, _ := a.output.Tile(1, size)
-	MTransposed := M.Transpose()
-	identity, _ := u.Identity(size)
+	M, _ := a.output.Tile([]int{1, size})
+	MTransposed := M.Transpose(false)
+	identity, _ := t.Identity(size)
 	IminusM, _ := identity.Subtract(MTransposed, true)
 	tmpXIminusM, _ := M.Multiply(IminusM, true)
 	outputGradient, _ := tmpXIminusM.MatMul(gradient)

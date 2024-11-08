@@ -2,11 +2,11 @@ package activations
 
 import (
 	"fmt"
-	u "github.com/cangeroe7/giraffe/internal/utils"
+	t "github.com/cangeroe7/giraffe/pgk/tensor"
 )
 
 type relu struct {
-	input u.Matrix
+	input t.Tensor
 }
 
 func Relu() Activation { return &relu{} }
@@ -15,7 +15,7 @@ func (a *relu) Type() string {
   return "relu"
 }
 
-func (a *relu) Forward(input u.Matrix) (u.Matrix, error) {
+func (a *relu) Forward(input t.Tensor) (t.Tensor, error) {
 	a.input = input
 	relu := func(x float64) (float64, error) {
 		if x > 0 {
@@ -34,7 +34,7 @@ func (a *relu) Forward(input u.Matrix) (u.Matrix, error) {
 	return output, nil
 }
 
-func (a *relu) Backward(gradient u.Matrix) (u.Matrix, error) {
+func (a *relu) Backward(gradient t.Tensor) (t.Tensor, error) {
 	reluPrime := func(x float64) (float64, error) {
 		if x > 0 {
 			return 1.0, nil

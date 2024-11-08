@@ -3,7 +3,7 @@ package layers
 import (
 	"errors"
 
-	u "github.com/cangeroe7/giraffe/internal/utils"
+	t "github.com/cangeroe7/giraffe/pgk/tensor"
 )
 
 type input struct {
@@ -18,7 +18,7 @@ func (i *input) Type() string {
 	return "input"
 }
 
-func (i *input) Forward(input u.Matrix) (u.Matrix, error) {
+func (i *input) Forward(input t.Tensor) (t.Tensor, error) {
 	inShape := input.Shape()
 	if len(inShape) != len(i.shape) {
 		return nil, errors.New("Not the same number of dimensions")
@@ -31,7 +31,7 @@ func (i *input) Forward(input u.Matrix) (u.Matrix, error) {
 	return input, nil
 }
 
-func (i *input) Backward(gradient u.Matrix) (u.Matrix, error) {
+func (i *input) Backward(gradient t.Tensor) (t.Tensor, error) {
 	return gradient, nil
 }
 
@@ -39,18 +39,18 @@ func (i *input) CompileLayer(inShape []int) ([]int, error) {
 	return inShape, nil
 }
 
-func (i *input) Weights() u.Matrix {
+func (i *input) Weights() t.Tensor {
 	return nil
 }
 
-func (i *input) Biases() u.Matrix {
+func (i *input) Biases() t.Tensor {
 	return nil
 }
 
-func (i *input) WeightsGradient() u.Matrix {
+func (i *input) WeightsGradient() t.Tensor {
 	return nil
 }
 
-func (i *input) BiasesGradient() u.Matrix {
+func (i *input) BiasesGradient() t.Tensor {
 	return nil
 }

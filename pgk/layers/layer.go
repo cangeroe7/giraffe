@@ -1,17 +1,17 @@
 package layers
 
 import (
-	u "github.com/cangeroe7/giraffe/internal/utils"
+	t "github.com/cangeroe7/giraffe/pgk/tensor"
 )
 
 type Layer interface {
-  Forward(input u.Matrix) (u.Matrix, error)
-  Backward(gradient u.Matrix) (u.Matrix, error)
+  Forward(input t.Tensor) (t.Tensor, error)
+  Backward(gradient t.Tensor) (t.Tensor, error)
   CompileLayer(inShape []int) ([]int, error)
-  Weights() u.Matrix
-  Biases() u.Matrix
-  WeightsGradient() u.Matrix
-  BiasesGradient() u.Matrix
+  Weights() t.Tensor
+  Biases() t.Tensor
+  WeightsGradient() t.Tensor
+  BiasesGradient() t.Tensor
   Type() string
 }
 

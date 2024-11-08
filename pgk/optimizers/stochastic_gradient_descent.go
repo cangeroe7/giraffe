@@ -3,7 +3,7 @@ package optimizers
 import (
 	"errors"
 
-	u "github.com/cangeroe7/giraffe/internal/utils"
+	t "github.com/cangeroe7/giraffe/pgk/tensor"
 )
 type SGD struct {
   LearningRate float64
@@ -19,7 +19,7 @@ func (o *SGD) Initialize() error {
   return nil
 }
 
-func (o *SGD) Apply(key string, param, gradient u.Matrix) error {
+func (o *SGD) Apply(key string, param, gradient t.Tensor) error {
   if param == nil || gradient == nil {
     return nil
   }

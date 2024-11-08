@@ -1,7 +1,7 @@
 package losses
 
 import (
-	u "github.com/cangeroe7/giraffe/internal/utils"
+	t "github.com/cangeroe7/giraffe/pgk/tensor"
 )
 var Losses = map[string]Loss{
   "mse": &meanSquareError{},
@@ -9,7 +9,7 @@ var Losses = map[string]Loss{
 }
 
 type Loss interface {
-  CalcLoss(yTrue, yPred u.Matrix) (float64, error)
-  Accuracy(yTrue, yPred u.Matrix) (float64, error)
-  Gradient(yTrue, yPred u.Matrix) (u.Matrix, error)
+  CalcLoss(yTrue, yPred t.Tensor) (float64, error)
+  Accuracy(yTrue, yPred t.Tensor) (float64, error)
+  Gradient(yTrue, yPred t.Tensor) (t.Tensor, error)
 }

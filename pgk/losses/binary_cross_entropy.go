@@ -4,14 +4,14 @@ import (
 	"errors"
 	"math"
 
-	u "github.com/cangeroe7/giraffe/internal/utils"
+	t "github.com/cangeroe7/giraffe/pgk/tensor"
 )
 
 // Binary Cross Entropy uses the function f(x) = yTrue * log(yPred) + (1 - yTrue) * log(1 - yPred)
 
 type binaryCrossEntropy struct{}
 
-func (l *binaryCrossEntropy) CalcLoss(yTrue, yPred u.Matrix) (float64, error) {
+func (l *binaryCrossEntropy) CalcLoss(yTrue, yPred t.Tensor) (float64, error) {
 	trueShape, predShape := yTrue.Shape(), yPred.Shape()
 	if len(trueShape) != len(predShape) {
 		for i := range trueShape {
@@ -21,20 +21,24 @@ func (l *binaryCrossEntropy) CalcLoss(yTrue, yPred u.Matrix) (float64, error) {
 		}
 	}
 
-	BCE := func(x, y float64) (float64, error) {
+  BCE := func(vals ...float64) (float64, error) {
+    if len(vals) != 2 {
+      return 0.0, errors.New("More or less than 2 inputs")
+    }
+    x, y := vals[0], vals[1]
 		return x*math.Log(y) + (1-x)*math.Log(1-y), nil
 	}
 
 	yPredClipped, _ := yPred.Map(noZerosOnes, false)
 
-	losses, _ := yTrue.MapOnto(BCE, yPredClipped, false)
+	losses, _ := yTrue.MapBatch(BCE, false, yPredClipped)
 
 	loss := losses.Avg()
 
 	return -loss, nil
 }
 
-func (l *binaryCrossEntropy) Accuracy(yTrue, yPred u.Matrix) (float64, error) {
+func (l *binaryCrossEntropy) Accuracy(yTrue, yPred t.Tensor) (float64, error) {
 	round := func(x float64) (float64, error) {
 		return math.Round(x), nil
 	}
@@ -55,17 +59,17 @@ func (l *binaryCrossEntropy) Accuracy(yTrue, yPred u.Matrix) (float64, error) {
 	return sum / float64(predicted.Size()), nil
 }
 
-func (l *binaryCrossEntropy) Gradient(yTrue, yPred u.Matrix) (u.Matrix, error) {
-	trueShape, predShape := yTrue.Shape(), yPred.Shape()
-	if len(trueShape) != len(predShape) {
-		for i := range trueShape {
-			if trueShape[i] != trueShape[i] {
-				return nil, errors.New("Dimensions do not match")
-			}
-		}
-	}
+func (l *binaryCrossEntropy) Gradient(yTrue, yPred t.Tensor) (t.Tensor, error) {
+  if !yTrue.Shape().Eq(yPred.Shape()) {
+    return nil, errors.New("Dimensions do not match")
+  }
 
-	primeBCE := func(x, y float64) (float64, error) {
+	primeBCE := func(vals ...float64) (float64, error) {
+    if len(vals) != 2 {
+      return 0.0, errors.New("More or less than 2 inputs")
+    }
+
+    x, y := vals[0], vals[1]
 		if y == 0.0 {
 			return 0.0, nil
 		}
@@ -73,7 +77,7 @@ func (l *binaryCrossEntropy) Gradient(yTrue, yPred u.Matrix) (u.Matrix, error) {
 	}
 
 	yPredClipped, _ := yPred.Map(noZerosOnes, false)
-	lossGradient, err := yTrue.MapOnto(primeBCE, yPredClipped, false)
+	lossGradient, err := yTrue.MapBatch(primeBCE, false, yPredClipped)
 	if err != nil {
 		return nil, err
 	}
