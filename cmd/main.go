@@ -12,6 +12,10 @@ import (
 func main() {
 
 	xTrain, yTrain, err := u.LoadCSV("/home/tskraan/giraffe/data/breastcancer/data.csv")
+  if err != nil {
+    fmt.Printf("err: %v\n", err)
+    return
+  }
 	columns := len(xTrain[0])
 	shape := []int{1, columns}
 
@@ -26,15 +30,17 @@ func main() {
 	optimizer := o.Adam{}
 
 	metrics := []string{"accuracy, loss"}
-	model.Compile(shape, loss, &optimizer, metrics)
+  err = model.Compile(shape, loss, &optimizer, metrics)
 	if err != nil {
-		fmt.Printf("err: %v\n", err)
+		fmt.Printf("err compiling model: %v\n", err)
+    return
 	}
 
 	err = model.Fit(xTrain, yTrain, 32, 50, true)
 	if err != nil {
 		fmt.Printf("err: %v\n", err)
 		fmt.Println("fitting messed up")
+    return
 	}
 
 	model.History()
@@ -45,6 +51,7 @@ func main() {
 	if err != nil {
 		fmt.Printf("err: %v\n", err)
 		fmt.Println("evaluate messed up")
+    return
 	}
 
 	fmt.Printf("test: %v\n", test)

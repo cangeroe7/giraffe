@@ -10,6 +10,32 @@ func (s Shape) IsMatrix() bool {
   return len(s) == 2
 }
 
+func (s Shape) Rows() int {
+  if len(s) < 2 {
+    return 1
+  }
+  return s[len(s)-2]
+}
+
+func (s Shape) Cols() int {
+  if len(s) == 0 { return 0 }
+  return s[len(s)-1]
+}
+
+func (s Shape) Channels() int {
+  if len(s) > 2 {
+    return s[len(s)-3]
+  }
+  return 1
+}
+
+func (s Shape) Batches() int {
+  if len(s) < 3 {
+    return 1
+  }
+  return s[0]
+}
+
 func (s Shape) CalcStrides() []int {
 	if s.IsScalar() {
 		return nil

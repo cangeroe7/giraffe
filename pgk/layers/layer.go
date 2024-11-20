@@ -5,14 +5,14 @@ import (
 )
 
 type Layer interface {
+  CompileLayer(inShape t.Shape) (t.Shape, error)
   Forward(input t.Tensor) (t.Tensor, error)
   Backward(gradient t.Tensor) (t.Tensor, error)
-  CompileLayer(inShape []int) ([]int, error)
+  Type() string
   Weights() t.Tensor
   Biases() t.Tensor
   WeightsGradient() t.Tensor
   BiasesGradient() t.Tensor
-  Type() string
 }
 
 

@@ -12,15 +12,9 @@ import (
 type binaryCrossEntropy struct{}
 
 func (l *binaryCrossEntropy) CalcLoss(yTrue, yPred t.Tensor) (float64, error) {
-	trueShape, predShape := yTrue.Shape(), yPred.Shape()
-	if len(trueShape) != len(predShape) {
-		for i := range trueShape {
-			if trueShape[i] != trueShape[i] {
-				return 0.0, errors.New("Dimensions do not match")
-			}
-		}
-	}
-
+  if !yTrue.Shape().Eq(yPred.Shape()) {
+    return 0.0, errors.New("Dimensions not equal")
+  }
   BCE := func(vals ...float64) (float64, error) {
     if len(vals) != 2 {
       return 0.0, errors.New("More or less than 2 inputs")

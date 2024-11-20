@@ -9,39 +9,40 @@ import (
 )
 
 type dense struct {
-	units           int
+	Units           int
+	Activation      a.Activation
+
 	input           t.Tensor
 	weights         t.Tensor
 	biases          t.Tensor
 	weightsGradient t.Tensor
 	biasesGradient  t.Tensor
-	activation      a.Activation
 }
 
 func Dense(units int, activation string) Layer {
 	activationFunc := a.Activations[activation]()
-	return &dense{units: units, activation: activationFunc}
+	return &dense{Units: units, Activation: activationFunc}
 }
 
 func (d *dense) Type() string {
   return "dense"
 }
 
-func (d *dense) CompileLayer(inShape []int) ([]int, error) {
+func (d *dense) CompileLayer(inShape t.Shape) (t.Shape, error) {
 	var limit float64
-	if d.activation.Type() == "relu" {
+	if d.Activation.Type() == "relu" {
 		// He initialization
 		limit = math.Sqrt(2.0 / float64(inShape[1]))
-		d.weights, _ = t.RandTensor([]int{inShape[1], d.units}, -limit, limit)
+		d.weights, _ = t.RandTensor([]int{inShape[1], d.Units}, -limit, limit)
 	} else {
 		// Xavier initialization
-		limit = math.Sqrt(6.0 / float64(inShape[1]+d.units))
-		d.weights, _ = t.RandTensor([]int{inShape[1], d.units}, -limit, limit)
+		limit = math.Sqrt(6.0 / float64(inShape[1]+d.Units))
+		d.weights, _ = t.RandTensor([]int{inShape[1], d.Units}, -limit, limit)
     
 	}
 
 	// Biases set to zero
-	d.biases = t.ZerosTensor([]int{1, d.units})
+	d.biases = t.ZerosTensor([]int{1, d.Units})
 
 	return d.biases.Shape(), nil
 }
@@ -57,7 +58,7 @@ func (d *dense) Forward(input t.Tensor) (t.Tensor, error) {
 
 	Y.RepAdd(d.biases, true)
 
-	YActivated, err := d.activation.Forward(Y)
+	YActivated, err := d.Activation.Forward(Y)
 
 	if err != nil {
 		return nil, err
@@ -69,7 +70,7 @@ func (d *dense) Forward(input t.Tensor) (t.Tensor, error) {
 func (d *dense) Backward(gradient t.Tensor) (t.Tensor, error) {
 	// activation layer backward propagation code
 
-	gradient, err := d.activation.Backward(gradient)
+	gradient, err := d.Activation.Backward(gradient)
   if err != nil {
     return nil, err
   }

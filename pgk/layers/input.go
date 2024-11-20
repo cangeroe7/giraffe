@@ -7,11 +7,11 @@ import (
 )
 
 type input struct {
-	shape []int
+	shape t.Shape
 }
 
-func Input(shape []int) Layer {
-	return &input{shape: shape}
+func Input(shape t.Shape) Layer {
+	return &input{shape: shape.Clone()}
 }
 
 func (i *input) Type() string {
@@ -35,7 +35,7 @@ func (i *input) Backward(gradient t.Tensor) (t.Tensor, error) {
 	return gradient, nil
 }
 
-func (i *input) CompileLayer(inShape []int) ([]int, error) {
+func (i *input) CompileLayer(inShape t.Shape) (t.Shape, error) {
 	return inShape, nil
 }
 
