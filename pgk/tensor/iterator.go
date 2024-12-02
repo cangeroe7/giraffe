@@ -7,6 +7,7 @@ import (
 
 type TensorIter interface {
   Next() (Tensor, bool)
+  HasNext() bool
 }
 
 type tensorIter struct {
@@ -28,6 +29,14 @@ func (ti *tensorIter) Next() (Tensor, bool) {
   return &tensor{TShape: ti.shape.Clone(), Data: (*ti.t.data())[start:end]}, true
 }
 
+func (ti *tensorIter) HasNext() bool {
+  end := ti.shape.TotalSize() * (ti.step + 1)
+
+  if ti.t.Shape().TotalSize() < end {
+    return false
+  }
+  return true
+}
 
 func IterFromTensor(t Tensor, what string) (TensorIter, error) {
   if t.Dims() < 2 {

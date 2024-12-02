@@ -1,180 +1,185 @@
 package layers
-//
-//import (
-	//"errors"
-	//"math"
-//)
-//
-//type Pooling struct {
-	//poolSize [2]int
-	//strides  [2]int
-	//padding  bool
-//}
-//
-//
-//type MaxPooling2D struct {
-	//p Pooling
-//}
-//
-//type MinPooling2D struct {
-	//p Pooling
-//}
-//
-//type AvgPooling2D struct {
-	//p Pooling
-//}
-//
-//func (max *MaxPooling2D) operation(matrix *[][]float64, row, col int) (float64, error) {
-	//numRows := len(*matrix)
-	//if numRows == 0 {
-		//return 0, errors.New("matrix is empty")
-	//}
-	//numCols := len((*matrix)[0])
-//
-	//if row < 0 || row+max.p.poolSize[0] > numRows || col < 0 || col+max.p.poolSize[1] > numCols {
-		//return 0, errors.New("pool step out of range")
-	//}
-//
-	//maxVal := (*matrix)[row][col]
-//
-	//for r := row; r < row+max.p.poolSize[0]; r++ {
-		//for c := col; c < col+max.p.poolSize[1]; c++ {
-			//newVal := (*matrix)[r][c]
-			//if newVal > maxVal {
-				//maxVal = newVal
-			//}
-		//}
-	//}
-//
-	//return maxVal, nil
-//}
-//
-//func (min *MinPooling2D) operation(matrix *[][]float64, row, col int) (float64, error) {
-	//numRows := len(*matrix) // Get the number of rows in the matrix
-	//if numRows == 0 {
-		//return 0, errors.New("matrix is empty")
-	//}
-	//numCols := len((*matrix)[0]) // Get the number of columns in the matrix
-//
-	//// Check if the starting point (row, col) and pool size exceed matrix bounds
-	//if row < 0 || row+min.p.poolSize[0] > numRows || col < 0 || col+min.p.poolSize[1] > numCols {
-		//return 0, errors.New("pool step out of range")
-	//}
-//
-	//minVal := (*matrix)[row][col]
-//
-	//for r := row; r < row+min.p.poolSize[0]; r++ {
-		//for c := col; c < col+min.p.poolSize[1]; c++ {
-			//newVal := (*matrix)[r][c]
-			//if newVal < minVal {
-				//minVal = newVal
-			//}
-		//}
-	//}
-	//return minVal, nil
-//}
-//
-//func (avg *AvgPooling2D) operation(matrix *[][]float64, row, col int) (float64, error) {
-	//numRows := len(*matrix) // Get the number of rows in the matrix
-	//if numRows == 0 {
-		//return 0, errors.New("matrix is empty")
-	//}
-	//numCols := len((*matrix)[0]) // Get the number of columns in the matrix
-//
-	//// Check if the starting point (row, col) and pool size exceed matrix bounds
-	//if row < 0 || row+avg.p.poolSize[0] > numRows || col < 0 || col+avg.p.poolSize[1] > numCols {
-		//return 0, errors.New("pool step out of range")
-	//}
-	//sum := 0.0
-//
-	//for r := row; r < row+avg.p.poolSize[0]; r++ {
-		//for c := col; c < col+avg.p.poolSize[1]; c++ {
-			//sum += (*matrix)[r][c]
-		//}
-	//}
-//
-	//avgVal := sum / (float64(avg.p.poolSize[0]) * float64(avg.p.poolSize[1]))
-//
-	//return avgVal, nil
-//}
-//
-//func (max *MaxPooling2D) forward(input [][]float64) ([][]float64, error) {
-	//output, err := max.p.process(input, max)
-	//if err != nil {
-		//return nil, err
-	//}
-	//return output, nil
-//}
-//
-//func (min *MinPooling2D) forward(input [][]float64) ([][]float64, error) {
-	//output, err := min.p.process(input, min)
-	//if err != nil {
-		//return nil, err
-	//}
-	//return output, nil
-//}
-//
-//func (avg *AvgPooling2D) forward(input [][]float64) ([][]float64, error) {
-	//output, err := avg.p.process(input, avg)
-	//if err != nil {
-		//return nil, err
-	//}
-	//return output, nil
-//}
-//
-//type PoolingOperation struct {
-//
-//}
-//
-//func (max *MaxPooling2D) backward(gradient [][]float64) [][]float64 {
-  //return gradient
-//}
-//
-//func (min *MinPooling2D) backward(gradient [][]float64) [][]float64 {
-  //return gradient
-//}
-//
-//func (avg *AvgPooling2D) backward(gradient [][]float64) [][]float64 {
-  //return gradient
-//}
-//
-//func (p *Pooling) process(matrix [][]float64, op PoolingOperation) ([][]float64, error) {
-//
-	//outRows := int(math.Floor(float64(len(matrix)) / float64(p.strides[0])))
-	//outCols := int(math.Floor(float64(len(matrix)) / float64(p.strides[1])))
-//
-	//if p.padding {
-		//outRows := int(math.Ceil(float64(len(matrix)) / float64(p.strides[0])))
-		//outCols := int(math.Ceil(float64(len(matrix)) / float64(p.strides[1])))
-		//bottomPad := (outRows-1)*p.strides[0] + p.poolSize[0] - len(matrix)
-		//rightPad := (outCols-1)*p.strides[1] + p.poolSize[1] - len(matrix[0])
-		//paddedMat := make([][]float64, len(matrix)+bottomPad)
-		//for i := range paddedMat {
-			//paddedMat[i] = make([]float64, len(matrix[0])+rightPad)
-		//}
-//
-		//for i := 0; i < len(matrix); i++ {
-			//for j := 0; j < len(matrix[0]); j++ {
-				//paddedMat[i][j] = matrix[i][j]
-			//}
-		//}
-		//matrix = paddedMat
-	//}
-//
-	//output := make([][]float64, outRows)
-	//for i := 0; i < outRows; i++ {
-		//output[i] = make([]float64, outCols)
-	//}
-//
-	//var err error
-	//for r := range outRows {
-		//for c := range outCols {
-			//output[r][c], err = op.operation(&matrix, r * p.strides[0], c * p.strides[1])
-			//if err != nil {
-				//return nil, err
-			//}
-		//}
-	//}
-//
-	//return output, nil
-//}
+
+import (
+	"errors"
+
+	t "github.com/cangeroe7/giraffe/pgk/tensor"
+)
+
+type PoolingType string
+
+const (
+	MaxPooling PoolingType = "max"
+	MinPooling PoolingType = "min"
+	AvgPooling PoolingType = "avg"
+)
+
+type Pooling struct {
+	PoolType   PoolingType
+	KernelSize [2]int
+	Strides    [2]int
+	Mode       PaddingMode
+
+  padding []int
+
+  outShape t.Shape
+	input t.Tensor
+}
+
+func (p *Pooling) CompileLayer(inShape t.Shape) (t.Shape, error) {
+
+	// Set padding values
+	padding, err := ComputePadding(inShape, p.KernelSize, p.Strides, p.Mode)
+  if err != nil {
+    return nil, err
+  }
+
+  p.padding = padding
+
+	// Compute output shape
+	outHeight := (p.padding[0]+p.padding[2]+inShape.Rows()-p.KernelSize[0])/p.Strides[0] + 1
+	outWidth := (p.padding[1]+p.padding[3]+inShape.Cols()-p.KernelSize[0])/p.Strides[1] + 1
+
+	var outShape t.Shape = []int{p.input.Shape().Channels(), outHeight, outWidth}
+
+	return outShape, nil
+}
+
+func (p *Pooling) Forward(input t.Tensor) (t.Tensor, error) {
+	if input == nil {
+		return nil, errors.New("input cannot be nil")
+	}
+
+	// Store the input for the backward pass
+	p.input = input
+
+	// Calculate output dimensions
+	inputShape := input.Shape().Clone()
+	outHeight := (inputShape.Rows()-p.KernelSize[0])/p.Strides[0] + 1
+	outWidth := (inputShape.Cols()-p.KernelSize[1])/p.Strides[1] + 1
+	outShape := []int{inputShape.Batches(), inputShape.Channels(), outHeight, outWidth}
+	output := t.ZerosTensor(outShape)
+
+	// Iterate through batches and channels
+	channelIter, _ := t.IterFromTensor(input, "channel")
+	outIter, _ := t.IterFromTensor(output, "channel")
+
+	for inChannel, ok := channelIter.Next(); ok; inChannel, ok = channelIter.Next() {
+		outChannel, _ := outIter.Next()
+
+		// Apply pooling operation
+		for i := 0; i < outHeight; i++ {
+			for j := 0; j < outWidth; j++ {
+				region, err := inChannel.RegionSlice(p.Strides[0]*i, p.Strides[1]*j, p.Strides[0], p.Strides[0])
+				if err != nil {
+					return nil, err
+				}
+
+				switch p.PoolType {
+				case MaxPooling:
+					outChannel.SetValueAt(i*outWidth+j, region.Max())
+				case MinPooling:
+					outChannel.SetValueAt(i*outWidth+j, region.Min())
+				case AvgPooling:
+					outChannel.SetValueAt(i*outWidth+j, region.Avg())
+				}
+			}
+		}
+	}
+
+	return output, nil
+}
+
+func (p *Pooling) Backward(gradient t.Tensor) (t.Tensor, error) {
+	if gradient == nil {
+		return nil, errors.New("gradient tensor cannot be nil")
+	}
+
+	if gradient.Shape().Rows() != (p.input.Shape().Rows()-p.KernelSize[0])/p.Strides[0]+1 ||
+		gradient.Shape().Cols() != (p.input.Shape().Cols()-p.KernelSize[1])/p.Strides[1]+1 {
+		return nil, errors.New("gradient shape does not match output shape of forward pass")
+	}
+
+	outputGradient := t.ZerosTensor(p.input.Shape().Clone())
+
+	channelIter, _ := t.IterFromTensor(p.input, "channel")
+	gradientIter, _ := t.IterFromTensor(gradient, "channel")
+	outGradientIter, _ := t.IterFromTensor(outputGradient, "channel")
+
+	for inChannel, ok := channelIter.Next(); ok; inChannel, ok = channelIter.Next() {
+		gradientChannel, _ := gradientIter.Next()
+		outChannel, _ := outGradientIter.Next()
+
+		for i := 0; i < gradient.Shape().Rows(); i++ {
+			for j := 0; j < gradient.Shape().Cols(); j++ {
+
+				startRow := p.Strides[0] * i
+				startCol := p.Strides[1] * j
+
+				// Slice the region from the input
+				region, err := inChannel.RegionSlice(startRow, startCol, p.KernelSize[0], p.KernelSize[1])
+				if err != nil {
+					return nil, err
+				}
+
+				switch p.PoolType {
+				case MaxPooling:
+					// Get local max index
+					localMaxIdx := region.MaxIndex()
+
+					// Convert local index to global index
+					localRow := localMaxIdx / p.KernelSize[1]
+					localCol := localMaxIdx % p.KernelSize[1]
+
+					globalRow := startRow + localRow
+					globalCol := startCol + localCol
+
+					// Update gradient in the output channel
+					outChannel.SetValueAt(globalRow*p.input.Shape().Cols()+globalCol,
+						outChannel.ValueAt(globalRow*p.input.Shape().Cols()+globalCol)+
+							gradientChannel.ValueAt(i*gradient.Shape().Cols()+j))
+
+				case MinPooling:
+					// Get local min index
+					localMinIdx := region.MinIndex()
+
+					// Convert local index to global index
+					localRow := localMinIdx / p.KernelSize[1]
+					localCol := localMinIdx % p.KernelSize[1]
+					globalRow := startRow + localRow
+					globalCol := startCol + localCol
+
+					// Update gradient in the output channel
+					outChannel.SetValueAt(globalRow*p.input.Shape().Cols()+globalCol,
+						outChannel.ValueAt(globalRow*p.input.Shape().Cols()+globalCol)+
+							gradientChannel.ValueAt(i*gradient.Shape().Cols()+j))
+
+				case AvgPooling:
+					// Distribute the gradient equally across the region
+					avgGradient := gradientChannel.ValueAt(i*gradient.Shape().Cols()+j) / float64(region.Size())
+					for localIdx := 0; localIdx < region.Size(); localIdx++ {
+						localRow := localIdx / p.KernelSize[1]
+						localCol := localIdx % p.KernelSize[1]
+						globalRow := startRow + localRow
+						globalCol := startCol + localCol
+
+						// Update gradient in the output channel
+						outChannel.SetValueAt(globalRow*p.input.Shape().Cols()+globalCol,
+							outChannel.ValueAt(globalRow*p.input.Shape().Cols()+globalCol)+avgGradient)
+					}
+				}
+			}
+		}
+	}
+
+	return outputGradient, nil
+}
+
+func (p *Pooling) Type() string {
+	return string(p.PoolType) + "pooling"
+}
+
+func (p *Pooling) Weights() t.Tensor         { return nil }
+func (p *Pooling) Biases() t.Tensor          { return nil }
+func (p *Pooling) WeightsGradient() t.Tensor { return nil }
+func (p *Pooling) BiasesGradient() t.Tensor  { return nil }

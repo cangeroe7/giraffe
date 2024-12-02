@@ -12,10 +12,13 @@ type Conv2D struct {
 	Filters    int
 	KernelSize [2]int
 	Strides    [2]int
-	Padded     bool
+	Mode       PaddingMode
 
 	padding []int
 
+	input t.Tensor
+
+	outShape        t.Shape
 	weights         t.Tensor
 	biases          t.Tensor
 	weightsGradient t.Tensor
@@ -32,7 +35,7 @@ func (c *Conv2D) CompileLayer(inShape t.Shape) (t.Shape, error) {
 		return nil, errors.New("Must be 1 or more filters")
 	}
 
-  // Check kernel sizes and sets default if needed
+	// Check kernel sizes and sets default if needed
 	switch {
 	case c.KernelSize[0] < 0 || c.KernelSize[1] < 0:
 		return nil, errors.New("Negative kernel value")
@@ -40,12 +43,12 @@ func (c *Conv2D) CompileLayer(inShape t.Shape) (t.Shape, error) {
 	case (c.KernelSize[0] > 0) != (c.KernelSize[1] > 0):
 		return nil, errors.New("One kernel set to zero, must be positive")
 
-  // Default when no kernel is given
+		// Default when no kernel is given
 	case c.KernelSize[0] == 0 && c.KernelSize[1] == 0:
 		c.KernelSize[0], c.KernelSize[1] = 1, 1
 	}
 
-  // Check stride sizes and sets default if needed
+	// Check stride sizes and sets default if needed
 	switch {
 	case c.Strides[0] < 0 || c.Strides[1] < 0:
 		return nil, errors.New("Negative stride value")
@@ -57,33 +60,36 @@ func (c *Conv2D) CompileLayer(inShape t.Shape) (t.Shape, error) {
 		c.Strides[0], c.Strides[1] = 1, 1
 	}
 
-  // Set padding values
-  c.CompilePadding(inShape)
+	// Set padding values
+	padding, err := ComputePadding(inShape, c.KernelSize, c.Strides, c.Mode)
+  if err != nil {
+    return nil, err
+  }
 
-  // Initialize biases to zero: 1 per filter
+  c.padding = padding
+
+	// Initialize biases to zero: 1 per filter
 	c.biases = t.ZerosTensor([]int{1, c.Filters})
 
-  // Compute output shape
+	// Compute output shape
 	outHeight := (c.padding[0]+c.padding[2]+inShape.Rows()-c.KernelSize[0])/c.Strides[0] + 1
 	outWidth := (c.padding[1]+c.padding[3]+inShape.Cols()-c.KernelSize[0])/c.Strides[1] + 1
 
 	var outShape t.Shape = []int{c.Filters, outHeight, outWidth}
 
-  // Xavier/Glorot Initialization
-	limit := math.Sqrt(6 / float64(inShape.TotalSize()) + float64(outShape.TotalSize()))
+	// Xavier/Glorot Initialization
+	limit := math.Sqrt(6/float64(inShape.TotalSize()) + float64(outShape.TotalSize()))
 
-
-  // Initialize weights/kernels to random value between -limit and limit
-	var err error
+	// Initialize weights/kernels to random value between -limit and limit
 	c.weights, err = t.RandTensor([]int{c.Filters, inShape.Channels(), c.KernelSize[0], c.KernelSize[1]}, -limit, limit)
 	if err != nil {
 		return nil, err
 	}
 
-  // Default activation function
-  if c.Activation == nil {
-    c.Activation = a.Relu()
-  }
+	// Default activation function
+	if c.Activation == nil {
+		c.Activation = a.Relu()
+	}
 
 	return outShape, nil
 }
@@ -117,7 +123,7 @@ func (c *Conv2D) Forward(input t.Tensor) (t.Tensor, error) {
 			return nil, err
 		}
 
-    currentBias := 0
+		currentBias := 0
 		for filter, ok := filterIter.Next(); ok; filter, ok = filterIter.Next() {
 			resMat, ok := resIter.Next()
 
@@ -130,23 +136,63 @@ func (c *Conv2D) Forward(input t.Tensor) (t.Tensor, error) {
 				return nil, err
 			}
 
-      // Add the bias
-      resMat.ScalarAdd(c.biases.ValueAt(currentBias), true)
+			// Add the bias
+			resMat.ScalarAdd(c.biases.ValueAt(currentBias), true)
+			currentBias++
 		}
 	}
 
-  // Apply the activation function
-  resTen, err = c.Activation.Forward(resTen)
-  if err != nil {
-    return nil, err
-  }
+	// Apply the activation function
+	resTen, err = c.Activation.Forward(resTen)
+	if err != nil {
+		return nil, err
+	}
 
 	return resTen, nil
 }
 
 func (c *Conv2D) Backward(gradient t.Tensor) (t.Tensor, error) {
 
+	if gradient.Shape().Channels() != c.Filters {
+		return nil, errors.New("gradient shape does not match the output shape")
+	}
+
+	// Compute the biases gradient
+	err := c.calculateBiasGradient(gradient)
+	if err != nil {
+		return nil, err
+	}
+
+	// Compute the weights gradient
+	// Initialize gradients for weights and biases
+	c.weightsGradient = t.ZerosTensor(c.weights.Shape())
+
 	return nil, nil
+}
+
+func (c *Conv2D) calculateBiasGradient(gradient t.Tensor) error {
+	c.biasesGradient = t.ZerosTensor([]int{1, c.Filters})
+
+	// Compute the bias gradient: sum each output filter gradient
+	gradientBatchIter, err := t.IterFromTensor(gradient, "batches")
+	if err != nil {
+		return err
+	}
+
+	for gradientBatch, ok := gradientBatchIter.Next(); ok; gradientBatch, ok = gradientBatchIter.Next() {
+
+		gradientFilterIter, err := t.IterFromTensor(gradientBatch, "matrix")
+		if err != nil {
+			return err
+		}
+
+		i := 0
+		for gradientFilter, ok := gradientFilterIter.Next(); ok; gradientFilter, ok = gradientFilterIter.Next() {
+			c.biasesGradient.SetValueAt(i, c.biasesGradient.ValueAt(i)+gradientFilter.Sum())
+			i++
+		}
+	}
+	return nil
 }
 
 func (c *Conv2D) Weights() t.Tensor {
@@ -163,41 +209,4 @@ func (c *Conv2D) WeightsGradient() t.Tensor {
 
 func (c *Conv2D) BiasesGradient() t.Tensor {
 	return c.biasesGradient
-}
-
-func (c *Conv2D) CompilePadding(shape t.Shape) {
-  if !c.Padded {
-    c.padding = make([]int, 4)
-     return
-  }
-	inHeight := shape.Rows()
-
-	outHeight := int(math.Ceil(float64(inHeight) / float64(c.Strides[0])))
-
-	padHeight := ((outHeight-1)*c.Strides[0] + c.KernelSize[0] - inHeight) / 2
-
-	var B, T, R, L int
-	if padHeight > 0 {
-		B = c.Strides[0] / 2
-		T = c.Strides[0] - B
-	} else {
-		B = padHeight
-		T = padHeight
-	}
-
-	inWidth := shape.Cols()
-
-	outWidth := int(math.Ceil(float64(shape.Cols()) / float64(c.Strides[1])))
-
-	padWidth := ((outWidth-1)*c.Strides[1] + c.KernelSize[1] - inWidth) / 2
-
-	if padHeight > 0 {
-		R = c.Strides[1] / 2
-		L = c.Strides[1] - R
-	} else {
-		R = padWidth
-		L = padWidth
-	}
-
-	c.padding = []int{T, R, B, L}
 }

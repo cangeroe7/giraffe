@@ -1,6 +1,7 @@
 package layers
 
 import (
+	"errors"
 	"fmt"
 	"math"
 
@@ -48,6 +49,9 @@ func (d *dense) CompileLayer(inShape t.Shape) (t.Shape, error) {
 }
 
 func (d *dense) Forward(input t.Tensor) (t.Tensor, error) {
+  if input == nil {
+    return nil, errors.New("input cannot be nil")
+  }
 
 	d.input = input
 	Y, err := input.MatMul(d.weights)
@@ -68,7 +72,9 @@ func (d *dense) Forward(input t.Tensor) (t.Tensor, error) {
 }
 
 func (d *dense) Backward(gradient t.Tensor) (t.Tensor, error) {
-	// activation layer backward propagation code
+  if gradient == nil {
+    return nil, errors.New("gradient cannot be nil")
+  }
 
 	gradient, err := d.Activation.Backward(gradient)
   if err != nil {
