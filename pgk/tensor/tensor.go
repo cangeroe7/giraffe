@@ -8,6 +8,10 @@ import (
 	"sync"
 )
 
+type Number interface {
+  int | float64
+}
+
 type Tensor interface {
 	// Info about the ndarray
 	Shape() Shape
@@ -20,6 +24,7 @@ type Tensor interface {
 	DataCopy() []float64
 	ValueAt(index int) float64
 	SetValueAt(index int, value float64) error
+  AddValueAt(index int, value float64) error
 
 	// Stuff Like Transpose
 	Transpose(inPlace bool) Tensor
@@ -60,7 +65,7 @@ type Tensor interface {
 
 	CrossCorrelate(other Tensor, strides [2]int, resTen Tensor) (Tensor, error)
 
-	RegionSlice(startRow, startCol, numRows, numCols int) (Tensor, error)
+	RegionSlice(startRow, startCol, numRows, numCols int) (Tensor, []int, error)
 
 	Print()
 }
@@ -209,21 +214,22 @@ func (t *tensor) CrossCorrelate(kernels Tensor, strides [2]int, resTen Tensor) (
 	return resTen, nil
 }
 
-func (t *tensor) RegionSlice(startRow, startCol, numRows, numCols int) (Tensor, error) {
+func (t *tensor) RegionSlice(startRow, startCol, numRows, numCols int) (Tensor, []int, error) {
 
 	if !t.Shape().IsMatrix() {
-		return nil, errors.New("tensor must be a matrix")
+		return nil, nil, errors.New("tensor must be a matrix")
 	}
 
 	if startRow < 0 || startCol < 0 || numRows <= 0 || numCols <= 0 {
-		return nil, errors.New("start indices must be non-negative and size must be positive")
+		return nil, nil, errors.New("start indices must be non-negative and size must be positive")
 	}
 
 	if startRow+numRows > t.Shape().Rows() || startCol+numCols > t.Shape().Cols() {
-		return nil, errors.New("region exceeds matrix bounds")
+		return nil, nil, errors.New("region exceeds matrix bounds")
 	}
 
 	data := make([]float64, 0, numRows*numCols)
+  indeces := make([]int, 0, numRows*numCols)
 
 	for i := 0; i < numRows; i++ {
 
@@ -232,13 +238,14 @@ func (t *tensor) RegionSlice(startRow, startCol, numRows, numCols int) (Tensor, 
 
 		for i := startIdx; i < endIdx; i++ {
 			data = append(data, t.ValueAt(i))
+      indeces = append(indeces, i)
 		}
 	}
 
 	// Create the new tensor
 	resMat, _ := TensorFrom([]int{numRows, numCols}, data)
 
-	return resMat, nil
+	return resMat, indeces, nil
 }
 
 func (t *tensor) Transpose(inPlace bool) Tensor {
@@ -740,6 +747,16 @@ func (t *tensor) SetValueAt(index int, value float64) error {
 	}
 
 	t.Data[index] = value
+
+	return nil
+}
+
+func (t *tensor) AddValueAt(index int, value float64) error {
+	if index >= t.Shape().TotalSize() {
+		return errors.New("index out of range")
+	}
+
+	t.Data[index] += value
 
 	return nil
 }

@@ -20,21 +20,23 @@ type Pooling struct {
 	Strides    [2]int
 	Mode       PaddingMode
 
-  padding []int
+	padding []int
 
-  outShape t.Shape
-	input t.Tensor
+	indices t.Tensor
+
+	outShape t.Shape
+	input    t.Tensor
 }
 
 func (p *Pooling) CompileLayer(inShape t.Shape) (t.Shape, error) {
 
 	// Set padding values
 	padding, err := ComputePadding(inShape, p.KernelSize, p.Strides, p.Mode)
-  if err != nil {
-    return nil, err
-  }
+	if err != nil {
+		return nil, err
+	}
 
-  p.padding = padding
+	p.padding = padding
 
 	// Compute output shape
 	outHeight := (p.padding[0]+p.padding[2]+inShape.Rows()-p.KernelSize[0])/p.Strides[0] + 1
@@ -60,7 +62,7 @@ func (p *Pooling) Forward(input t.Tensor) (t.Tensor, error) {
 	outShape := []int{inputShape.Batches(), inputShape.Channels(), outHeight, outWidth}
 	output := t.ZerosTensor(outShape)
 
-	// Iterate through batches and channels
+	// Iterate through channels
 	channelIter, _ := t.IterFromTensor(input, "channel")
 	outIter, _ := t.IterFromTensor(output, "channel")
 
@@ -70,7 +72,7 @@ func (p *Pooling) Forward(input t.Tensor) (t.Tensor, error) {
 		// Apply pooling operation
 		for i := 0; i < outHeight; i++ {
 			for j := 0; j < outWidth; j++ {
-				region, err := inChannel.RegionSlice(p.Strides[0]*i, p.Strides[1]*j, p.Strides[0], p.Strides[0])
+				region, _, err := inChannel.RegionSlice(p.Strides[0]*i, p.Strides[1]*j, p.Strides[0], p.Strides[0])
 				if err != nil {
 					return nil, err
 				}
@@ -117,55 +119,33 @@ func (p *Pooling) Backward(gradient t.Tensor) (t.Tensor, error) {
 				startCol := p.Strides[1] * j
 
 				// Slice the region from the input
-				region, err := inChannel.RegionSlice(startRow, startCol, p.KernelSize[0], p.KernelSize[1])
+				region, indices, err := inChannel.RegionSlice(startRow, startCol, p.KernelSize[0], p.KernelSize[1])
 				if err != nil {
 					return nil, err
 				}
 
+				gradientIdx := i*gradient.Shape().Cols() + j
 				switch p.PoolType {
 				case MaxPooling:
-					// Get local max index
-					localMaxIdx := region.MaxIndex()
-
-					// Convert local index to global index
-					localRow := localMaxIdx / p.KernelSize[1]
-					localCol := localMaxIdx % p.KernelSize[1]
-
-					globalRow := startRow + localRow
-					globalCol := startCol + localCol
+					// Get max index
+					maxIdx := indices[region.MaxIndex()]
 
 					// Update gradient in the output channel
-					outChannel.SetValueAt(globalRow*p.input.Shape().Cols()+globalCol,
-						outChannel.ValueAt(globalRow*p.input.Shape().Cols()+globalCol)+
-							gradientChannel.ValueAt(i*gradient.Shape().Cols()+j))
+					outChannel.AddValueAt(maxIdx, gradientChannel.ValueAt(gradientIdx))
 
 				case MinPooling:
-					// Get local min index
-					localMinIdx := region.MinIndex()
 
-					// Convert local index to global index
-					localRow := localMinIdx / p.KernelSize[1]
-					localCol := localMinIdx % p.KernelSize[1]
-					globalRow := startRow + localRow
-					globalCol := startCol + localCol
+					// Get min index
+					minIdx := indices[region.MinIndex()]
 
 					// Update gradient in the output channel
-					outChannel.SetValueAt(globalRow*p.input.Shape().Cols()+globalCol,
-						outChannel.ValueAt(globalRow*p.input.Shape().Cols()+globalCol)+
-							gradientChannel.ValueAt(i*gradient.Shape().Cols()+j))
+					outChannel.AddValueAt(minIdx, gradientChannel.ValueAt(gradientIdx))
 
 				case AvgPooling:
-					// Distribute the gradient equally across the region
-					avgGradient := gradientChannel.ValueAt(i*gradient.Shape().Cols()+j) / float64(region.Size())
-					for localIdx := 0; localIdx < region.Size(); localIdx++ {
-						localRow := localIdx / p.KernelSize[1]
-						localCol := localIdx % p.KernelSize[1]
-						globalRow := startRow + localRow
-						globalCol := startCol + localCol
+					avgGradient := gradientChannel.ValueAt(gradientIdx) / float64(region.Size())
 
-						// Update gradient in the output channel
-						outChannel.SetValueAt(globalRow*p.input.Shape().Cols()+globalCol,
-							outChannel.ValueAt(globalRow*p.input.Shape().Cols()+globalCol)+avgGradient)
+					for _, index := range indices {
+						outChannel.AddValueAt(index, avgGradient)
 					}
 				}
 			}
