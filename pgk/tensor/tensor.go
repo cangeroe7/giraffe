@@ -695,7 +695,7 @@ func (t *tensor) Pad(pads ...int) (Tensor, error) {
 	for mat, ok := tenIter.Next(); ok; mat, ok = tenIter.Next() {
 		resMat, ok := resTenIter.Next()
 		if !ok {
-			return nil, errors.New("Shouldn't be possible, but result matrix iterator ran out of matrices before ten")
+			return nil, errors.New("Shouldn't be possible, but result matrix iterator ran out of matrices before tensor")
 		}
 
 		Data := *mat.data()

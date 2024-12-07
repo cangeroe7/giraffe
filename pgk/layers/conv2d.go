@@ -153,12 +153,17 @@ func (c *Conv2D) Forward(input t.Tensor) (t.Tensor, error) {
 
 func (c *Conv2D) Backward(gradient t.Tensor) (t.Tensor, error) {
 
+  gradient, err := c.Activation.Backward(gradient)
+  if err != nil {
+    return nil, err
+  }
+
 	if gradient.Shape().Channels() != c.Filters {
 		return nil, errors.New("gradient shape does not match the output shape")
 	}
 
 	// Compute the biases gradient
-	err := c.calculateBiasGradient(gradient)
+	err = c.computeBiasGradient(gradient)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +175,7 @@ func (c *Conv2D) Backward(gradient t.Tensor) (t.Tensor, error) {
 	return nil, nil
 }
 
-func (c *Conv2D) calculateBiasGradient(gradient t.Tensor) error {
+func (c *Conv2D) computeBiasGradient(gradient t.Tensor) error {
 	c.biasesGradient = t.ZerosTensor([]int{1, c.Filters})
 
 	// Compute the bias gradient: sum each output filter gradient
@@ -193,6 +198,14 @@ func (c *Conv2D) calculateBiasGradient(gradient t.Tensor) error {
 		}
 	}
 	return nil
+}
+
+func (c *Conv2D) computeWeightsGradient(gradient t.Tensor) error {
+  c.weightsGradient = t.ZerosTensor(c.weights.Shape().Clone())
+
+  
+  
+  return nil
 }
 
 func (c *Conv2D) Weights() t.Tensor {
