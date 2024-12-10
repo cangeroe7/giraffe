@@ -1,8 +1,9 @@
 package layers
 
 import (
-  "math"
-  "errors"
+	"errors"
+	"math"
+
 	t "github.com/cangeroe7/giraffe/pgk/tensor"
 )
 
@@ -11,10 +12,12 @@ type Layer interface {
 	Forward(input t.Tensor) (t.Tensor, error)
 	Backward(gradient t.Tensor) (t.Tensor, error)
 	Type() string
+
 	Weights() t.Tensor
 	Biases() t.Tensor
 	WeightsGradient() t.Tensor
 	BiasesGradient() t.Tensor
+	Params() map[string]interface{}
 }
 
 type PaddingMode string
@@ -26,11 +29,11 @@ const (
 
 func ComputePadding(shape t.Shape, kernelSize, strides [2]int, mode PaddingMode) ([]int, error) {
 
-  if shape == nil {
-    return nil, errors.New("shape cannot be nil")
-  }
+	if shape == nil {
+		return nil, errors.New("shape cannot be nil")
+	}
 
-  var padding []int
+	var padding []int
 	if mode == Valid {
 		padding = make([]int, 4)
 		return padding, nil
@@ -66,4 +69,28 @@ func ComputePadding(shape t.Shape, kernelSize, strides [2]int, mode PaddingMode)
 	}
 
 	return []int{T, R, B, L}, nil
+}
+
+func interfaceToIntArray(input []interface{}) ([]int, error) {
+	result := make([]int, len(input))
+	for i, v := range input {
+		if val, ok := v.(float64); ok {
+			result[i] = int(val)
+		} else {
+			return nil, errors.New("input contains non-integer value")
+		}
+	}
+  return result, nil
+}
+func InterfaceToFloat64Array(input []interface{}) ([]float64, error) {
+
+	result := make([]float64, len(input))
+	for i, v := range input {
+		if val, ok := v.(float64); ok {
+			result[i] = val
+		} else {
+			return nil, errors.New("input contains non-float64 value")
+		}
+	}
+  return result, nil
 }

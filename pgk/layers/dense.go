@@ -9,9 +9,9 @@ import (
 	t "github.com/cangeroe7/giraffe/pgk/tensor"
 )
 
-type dense struct {
-	Units           int
-	Activation      a.Activation
+type Dense struct {
+	Units      int
+	Activation a.Activation
 
 	input           t.Tensor
 	weights         t.Tensor
@@ -20,26 +20,28 @@ type dense struct {
 	biasesGradient  t.Tensor
 }
 
-func Dense(units int, activation string) Layer {
-	activationFunc := a.Activations[activation]()
-	return &dense{Units: units, Activation: activationFunc}
+func (d *Dense) Type() string {
+	return "Dense"
 }
 
-func (d *dense) Type() string {
-  return "dense"
+func (d *Dense) Params() map[string]interface{} {
+	return map[string]interface{}{
+		"units":      d.Units,
+		"activation": d.Activation.Type(),
+	}
 }
 
-func (d *dense) CompileLayer(inShape t.Shape) (t.Shape, error) {
+func (d *Dense) CompileLayer(inShape t.Shape) (t.Shape, error) {
 	var limit float64
 	if d.Activation.Type() == "relu" {
 		// He initialization
-		limit = math.Sqrt(2.0 / float64(inShape[1]))
-		d.weights, _ = t.RandTensor([]int{inShape[1], d.Units}, -limit, limit)
+		limit = math.Sqrt(2.0 / float64(inShape.Cols()))
+		d.weights, _ = t.RandTensor([]int{inShape.Cols(), d.Units}, -limit, limit)
 	} else {
 		// Xavier initialization
-		limit = math.Sqrt(6.0 / float64(inShape[1]+d.Units))
-		d.weights, _ = t.RandTensor([]int{inShape[1], d.Units}, -limit, limit)
-    
+		limit = math.Sqrt(6.0 / float64(inShape.Cols()+d.Units))
+		d.weights, _ = t.RandTensor([]int{inShape.Cols(), d.Units}, -limit, limit)
+
 	}
 
 	// Biases set to zero
@@ -48,10 +50,15 @@ func (d *dense) CompileLayer(inShape t.Shape) (t.Shape, error) {
 	return d.biases.Shape(), nil
 }
 
-func (d *dense) Forward(input t.Tensor) (t.Tensor, error) {
-  if input == nil {
-    return nil, errors.New("input cannot be nil")
-  }
+func (d *Dense) Forward(input t.Tensor) (t.Tensor, error) {
+	if input == nil {
+		return nil, errors.New("input cannot be nil")
+	}
+
+	// For when Dense comes in as (batches, 1, 1, cols)
+	totalSize := input.Shape().TotalSize()
+	rows := totalSize / input.Shape().Cols()
+	input.Reshape([]int{1, 1, rows, input.Shape().Cols()})
 
 	d.input = input
 	Y, err := input.MatMul(d.weights)
@@ -71,23 +78,22 @@ func (d *dense) Forward(input t.Tensor) (t.Tensor, error) {
 	return YActivated, nil
 }
 
-func (d *dense) Backward(gradient t.Tensor) (t.Tensor, error) {
-  if gradient == nil {
-    return nil, errors.New("gradient cannot be nil")
-  }
+func (d *Dense) Backward(gradient t.Tensor) (t.Tensor, error) {
+	if gradient == nil {
+		return nil, errors.New("gradient cannot be nil")
+	}
 
 	gradient, err := d.Activation.Backward(gradient)
-  if err != nil {
-    return nil, err
-  }
+	if err != nil {
+		return nil, err
+	}
 
-  d.weightsGradient, err = d.input.Transpose(false).MatMul(gradient)
-  
-  if err != nil {
-    return nil, err
-  }
+	d.weightsGradient, err = d.input.Transpose(false).MatMul(gradient)
+	if err != nil {
+		return nil, err
+	}
 
-  d.biasesGradient, err = gradient.AxisSum(0)
+	d.biasesGradient, err = gradient.AxisSum(0)
 	if err != nil {
 		fmt.Printf("err after activation backward: %v\n", err)
 		return nil, err
@@ -101,19 +107,55 @@ func (d *dense) Backward(gradient t.Tensor) (t.Tensor, error) {
 	return outputGradient, nil
 }
 
-func (d *dense) WeightsGradient() t.Tensor {
-  return d.weightsGradient
+func (d *Dense) WeightsGradient() t.Tensor {
+	return d.weightsGradient
 }
 
-func (d *dense) BiasesGradient() t.Tensor {
-  return d.biasesGradient
+func (d *Dense) BiasesGradient() t.Tensor {
+	return d.biasesGradient
 }
 
-
-func (d *dense) Weights() t.Tensor {
-  return d.weights
+func (d *Dense) Weights() t.Tensor {
+	return d.weights
 }
 
-func (d *dense) Biases() t.Tensor {
-  return d.biases
+func (d *Dense) Biases() t.Tensor {
+	return d.biases
+}
+
+func DenseFromParams(params map[string]interface{}, weights []float64, biases []float64) (Layer, error) {
+  unitsFloat64, ok := params["units"].(float64)
+  if !ok {
+    return nil, errors.New("missing or invalid 'units' parameter")
+  }
+
+  units := int(unitsFloat64)
+
+  activation, ok := params["activation"].(string)
+  if !ok {
+    return nil, errors.New("missing or invalid 'activation' parameter")
+  }
+
+  activationStruct := a.Activations[activation]()
+
+  weightsShape := []int{len(weights)/units, units}
+  biasesShape := []int{1, units}
+
+  weightsTensor, err := t.TensorFrom(weightsShape, weights)
+  if err != nil {
+    return nil, err
+  }
+
+
+  biasesTensor, err := t.TensorFrom(biasesShape, biases)
+  if err != nil {
+    return nil, err
+  }
+
+  return &Dense{
+    Units: units,
+    Activation: activationStruct,
+    weights: weightsTensor,
+    biases: biasesTensor,
+  }, nil
 }

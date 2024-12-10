@@ -7,17 +7,19 @@ import (
 	t "github.com/cangeroe7/giraffe/pgk/tensor"
 )
 
-func Sigmoid() Activation { return &sigmoid{} }
-
-type sigmoid struct {
+type Sigmoid struct {
 	input t.Tensor
 }
 
-func (a *sigmoid) Type() string {
+func sigmoid() Activation {
+  return &Sigmoid{}
+}
+
+func (a *Sigmoid) Type() string {
   return "sigmoid"
 }
 
-func (a *sigmoid) Forward(input t.Tensor) (t.Tensor, error) {
+func (a *Sigmoid) Forward(input t.Tensor) (t.Tensor, error) {
 
 	a.input = input
 
@@ -34,7 +36,7 @@ func (a *sigmoid) Forward(input t.Tensor) (t.Tensor, error) {
 	return output, nil
 }
 
-func (a *sigmoid) Backward(gradient t.Tensor) (t.Tensor, error) {
+func (a *Sigmoid) Backward(gradient t.Tensor) (t.Tensor, error) {
 
 	sigmoidPrime := func(x float64) (float64, error) {
 		sigmoid := 1 / (1 + math.Exp(-x))

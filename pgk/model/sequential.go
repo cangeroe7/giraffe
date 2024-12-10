@@ -1,32 +1,33 @@
 package model
 
 import (
+	"errors"
 	"fmt"
 	"math"
+	"time"
 
-	u "github.com/cangeroe7/giraffe/internal/utils"
-	t "github.com/cangeroe7/giraffe/pgk/tensor"
 	la "github.com/cangeroe7/giraffe/pgk/layers"
 	lo "github.com/cangeroe7/giraffe/pgk/losses"
 	o "github.com/cangeroe7/giraffe/pgk/optimizers"
+	t "github.com/cangeroe7/giraffe/pgk/tensor"
 )
 
 type Model interface {
 	Add(layer la.Layer)
-	Compile(inputShape []int, optimizer o.Optimizer, loss string, metrics []string) error
-	Fit(xTrain, yTrain [][]float64, batchSize int, epochs int) error
-	History(metrics ...string) []float64
+	Compile(inputShape []int, optimizer o.Optimizer, loss string, metrics []string, compileLayers bool) error
+	Fit(xTrain, yTrain t.Tensor, batchSize int, epochs int) error
+	History(metrics ...string) map[string]([]float64)
 	Evaluate(input [][]float64) (t.Tensor, error)
+	SaveModel(path string) error
 }
 
 type sequential struct {
-	layers     []la.Layer
-	optimizer  o.Optimizer
-	loss       lo.Loss
-	batchSize  int
-	epochs     int
-	history    map[string]([]float64)
-	normalizer u.Normalizer
+	layers    []la.Layer
+	optimizer o.Optimizer
+	loss      lo.Loss
+	batchSize int
+	epochs    int
+	history   map[string]([]float64)
 }
 
 func Sequential(layers ...la.Layer) *sequential {
@@ -42,25 +43,29 @@ func (s *sequential) Add(layer la.Layer) {
 	s.layers = append(s.layers, layer)
 }
 
-func (s *sequential) Compile(inputShape []int, loss string, optimizer o.Optimizer, metrics []string) error {
+func (s *sequential) Compile(inputShape []int, loss lo.Loss, optimizer o.Optimizer, metrics []string, compileLayers bool) error {
 	// TODO: Check if all layers can be or are properly connected to each other
-	outputShape := inputShape
-	for _, layer := range s.layers {
-		var err error
-		outputShape, err = layer.CompileLayer(outputShape)
-		if err != nil {
-			return err
+	if compileLayers {
+		outputShape := inputShape
+		for _, layer := range s.layers {
+			var err error
+			outputShape, err = layer.CompileLayer(outputShape)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
-	// TODO: Check if the output layer is compatible with the loss function
-	s.loss = lo.Losses[loss]
-	// TODO: Initialize the metrics that we want to keep track off
-	// TODO: Set up the optimizer for the model
+	// Set loss
+	if loss == nil {
+		return errors.New("loss has to be assigned")
+	}
+
+	s.loss = loss
 
 	// Set optimzers; stochatic gradient descent as default
 	if optimizer == nil {
-		optimizer = &o.SGD{}
+		optimizer = &o.Adam{}
 	}
 	s.optimizer = optimizer
 	s.optimizer.Initialize()
@@ -68,40 +73,48 @@ func (s *sequential) Compile(inputShape []int, loss string, optimizer o.Optimize
 	return nil
 }
 
-func (s *sequential) Fit(xTrain, yTrain [][]float64, batchSize, epochs int, normalize bool) error {
-	if normalize {
-		s.normalizer.SetFeatures(&xTrain)
-		s.normalizer.NormalizeData(&xTrain)
-	}
+func (s *sequential) Fit(xTrain, yTrain t.Tensor, batchSize, epochs int, normalize bool) error {
 
 	for epoch := 0; epoch < epochs; epoch++ {
-		// Shuffle data for each epoch to prevent overfitting to fixed batches
+		fmt.Printf("\nEpoch %v  \n", epoch+1)
+
+		start := time.Now()
 		totalLoss := 0.0
 		totalAccuracy := 0.0
-		u.Shuffle(xTrain, yTrain)
 
-		numBatches := (len(xTrain) + batchSize - 1) / batchSize
+		// Shuffle data for each epoch to prevent overfitting to fixed batches
+		t.Shuffle(xTrain, yTrain)
+
+		numBatches := (xTrain.Shape().Batches() + batchSize - 1) / batchSize
+
+    batchStep := numBatches / 50
+    diff := numBatches % 50 
 
 		for batch := 0; batch < numBatches; batch++ {
+			if (batch - diff)%(batchStep+1) == 0 {
+				fmt.Printf("#")
+			}
+
 			// Get current batch of data
 			start := batch * batchSize
-			end := min(start+batchSize, len(xTrain))
+			end := min(start+batchSize, xTrain.Shape().Batches()-1)
 
-      subXTrain := xTrain[start:end]
-			XBatch, err := t.TensorFromMatrix(&subXTrain)
+			XBatch, err := xTrain.BatchSlice(start, end) //t.TensorFromMatrix(&subXTrain)
 			if err != nil {
 				return err
 			}
-      subYTrain := yTrain[start:end]
-			YBatch, err := t.TensorFromMatrix(&subYTrain)
+
+			YBatch, err := yTrain.BatchSlice(start, end) //t.TensorFromMatrix(&subXTrain)
 			if err != nil {
 				return err
 			}
+			YBatch.Reshape([]int{YBatch.Shape().Batches(), YBatch.Shape().Cols()})
 
 			// Forward pass
 			output := XBatch
 			for _, layer := range s.layers {
 				output, err = layer.Forward(output)
+
 				if err != nil {
 					return err
 				}
@@ -142,42 +155,41 @@ func (s *sequential) Fit(xTrain, yTrain [][]float64, batchSize, epochs int, norm
 		}
 
 		// Append the loss and accuracy metrics
-		s.history["loss"] = append(s.history["loss"], math.Round((totalLoss * 10000)/float64(numBatches))/10000)
-		s.history["accuracy"] = append(s.history["accuracy"], math.Round((totalAccuracy * 10000)/float64(numBatches))/10000)
+		s.history["loss"] = append(s.history["loss"], math.Round((totalLoss*10000)/float64(numBatches))/10000)
+		s.history["accuracy"] = append(s.history["accuracy"], math.Round((totalAccuracy*10000)/float64(numBatches))/10000)
+
+		duration := time.Since(start)
+		fmt.Printf(" Time: %v\n", duration)
+    fmt.Printf("Metrics: [ loss: %v, accuracy: %v ]\n", totalLoss/float64(numBatches), totalAccuracy/float64(numBatches))
+
+
 	}
 
 	return nil
 }
 
-func (s *sequential) History(metrics ...string) map[string][]float64 {
+func (s *sequential) History(metrics ...string) map[string]([]float64) {
 	fmt.Printf("loss: %v\n", s.history["loss"])
 	fmt.Printf("accuracy: %v\n", s.history["accuracy"])
 	return s.history
 }
 
-func (s *sequential) Evaluate(data *[][]float64) (t.Tensor, error) {
+func (s *sequential) Evaluate(input t.Tensor) (t.Tensor, error) {
 	// Normalize data if normalization is used
-	if s.normalizer.Activated {
-		s.normalizer.NormalizeData(data)
-	}
-
-	input, err := t.TensorFromMatrix(data)
-	if err != nil {
-		return nil, err
-	}
 
 	output := input
+	var err error
 	for _, layer := range s.layers {
 		output, err = layer.Forward(output)
 		if err != nil {
 			return nil, err
 		}
 	}
-  round := func(x float64) (float64, error) {
-    return math.Round(x * 10000) / 10000, nil
-  }
+	round := func(x float64) (float64, error) {
+		return math.Round(x*10000) / 10000, nil
+	}
 
-  _, _= output.Map(round, true)
+	_, _ = output.Map(round, true)
 
 	return output, nil
 }

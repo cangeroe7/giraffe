@@ -11,8 +11,9 @@ type Activation interface {
 }
 
 var Activations = map[string]func() Activation {
-  "relu": Relu,
-  "sigmoid": Sigmoid,
+  "relu": relu,
+  "sigmoid": sigmoid,
+  "softmax": softmax,
   "": nil,
   "none": nil,
   "linear": nil,

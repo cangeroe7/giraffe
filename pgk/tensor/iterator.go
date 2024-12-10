@@ -53,7 +53,7 @@ func IterFromTensor(t Tensor, what string) (TensorIter, error) {
     shape = t.Shape().Clone()[1:]
 
   case "r", "row", "rows":
-    shape = []int{1, t.Shape()[len(t.Shape())-1]}
+    shape = []int{1, t.Shape().Cols()}
 
   case "c", "col", "column", "columns":
     shape = []int{1,1}

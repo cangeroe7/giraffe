@@ -9,9 +9,9 @@ import (
 
 // Binary Cross Entropy uses the function f(x) = yTrue * log(yPred) + (1 - yTrue) * log(1 - yPred)
 
-type binaryCrossEntropy struct{}
+type BinaryCrossEntropy struct{}
 
-func (l *binaryCrossEntropy) CalcLoss(yTrue, yPred t.Tensor) (float64, error) {
+func (l *BinaryCrossEntropy) CalcLoss(yTrue, yPred t.Tensor) (float64, error) {
   if !yTrue.Shape().Eq(yPred.Shape()) {
     return 0.0, errors.New("Dimensions not equal")
   }
@@ -32,7 +32,7 @@ func (l *binaryCrossEntropy) CalcLoss(yTrue, yPred t.Tensor) (float64, error) {
 	return -loss, nil
 }
 
-func (l *binaryCrossEntropy) Accuracy(yTrue, yPred t.Tensor) (float64, error) {
+func (l *BinaryCrossEntropy) Accuracy(yTrue, yPred t.Tensor) (float64, error) {
 	round := func(x float64) (float64, error) {
 		return math.Round(x), nil
 	}
@@ -53,7 +53,7 @@ func (l *binaryCrossEntropy) Accuracy(yTrue, yPred t.Tensor) (float64, error) {
 	return sum / float64(predicted.Size()), nil
 }
 
-func (l *binaryCrossEntropy) Gradient(yTrue, yPred t.Tensor) (t.Tensor, error) {
+func (l *BinaryCrossEntropy) Gradient(yTrue, yPred t.Tensor) (t.Tensor, error) {
   if !yTrue.Shape().Eq(yPred.Shape()) {
     return nil, errors.New("Dimensions do not match")
   }
@@ -77,15 +77,4 @@ func (l *binaryCrossEntropy) Gradient(yTrue, yPred t.Tensor) (t.Tensor, error) {
 	}
 
 	return lossGradient, nil
-}
-
-func noZerosOnes(x float64) (float64, error) {
-	epsilon := 1e-15
-	if x < epsilon {
-		return epsilon, nil
-	}
-	if x > 1-epsilon {
-		return 1 - epsilon, nil
-	}
-	return x, nil
 }

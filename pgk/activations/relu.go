@@ -5,17 +5,19 @@ import (
 	t "github.com/cangeroe7/giraffe/pgk/tensor"
 )
 
-type relu struct {
+type Relu struct {
 	input t.Tensor
 }
 
-func Relu() Activation { return &relu{} }
+func relu() Activation {
+  return &Relu{}
+}
 
-func (a *relu) Type() string {
+func (a *Relu) Type() string {
   return "relu"
 }
 
-func (a *relu) Forward(input t.Tensor) (t.Tensor, error) {
+func (a *Relu) Forward(input t.Tensor) (t.Tensor, error) {
 	a.input = input
 	relu := func(x float64) (float64, error) {
 		if x > 0 {
@@ -34,7 +36,7 @@ func (a *relu) Forward(input t.Tensor) (t.Tensor, error) {
 	return output, nil
 }
 
-func (a *relu) Backward(gradient t.Tensor) (t.Tensor, error) {
+func (a *Relu) Backward(gradient t.Tensor) (t.Tensor, error) {
 	reluPrime := func(x float64) (float64, error) {
 		if x > 0 {
 			return 1.0, nil

@@ -20,12 +20,20 @@ type Pooling struct {
 	Strides    [2]int
 	Mode       PaddingMode
 
-	padding []int
-
-	indices t.Tensor
-
-	outShape t.Shape
 	input    t.Tensor
+}
+
+func (p *Pooling) Type() string {
+	return "Pooling"
+}
+
+func (p *Pooling) Params() map[string]interface{} {
+	return map[string]interface{}{
+    "pool_type": p.PoolType,
+    "kernel_size": p.KernelSize,
+    "strides": p.Strides,
+    "mode": p.Mode,
+  }
 }
 
 func (p *Pooling) CompileLayer(inShape t.Shape) (t.Shape, error) {
@@ -36,13 +44,12 @@ func (p *Pooling) CompileLayer(inShape t.Shape) (t.Shape, error) {
 		return nil, err
 	}
 
-	p.padding = padding
-
 	// Compute output shape
-	outHeight := (p.padding[0]+p.padding[2]+inShape.Rows()-p.KernelSize[0])/p.Strides[0] + 1
-	outWidth := (p.padding[1]+p.padding[3]+inShape.Cols()-p.KernelSize[0])/p.Strides[1] + 1
+	outHeight := (padding[0]+padding[2]+inShape.Rows()-p.KernelSize[0])/p.Strides[0] + 1
+	outWidth := (padding[1]+padding[3]+inShape.Cols()-p.KernelSize[0])/p.Strides[1] + 1
 
-	var outShape t.Shape = []int{p.input.Shape().Channels(), outHeight, outWidth}
+
+	var outShape t.Shape = []int{inShape.Channels(), outHeight, outWidth}
 
 	return outShape, nil
 }
@@ -155,11 +162,52 @@ func (p *Pooling) Backward(gradient t.Tensor) (t.Tensor, error) {
 	return outputGradient, nil
 }
 
-func (p *Pooling) Type() string {
-	return string(p.PoolType) + "pooling"
-}
-
 func (p *Pooling) Weights() t.Tensor         { return nil }
 func (p *Pooling) Biases() t.Tensor          { return nil }
 func (p *Pooling) WeightsGradient() t.Tensor { return nil }
 func (p *Pooling) BiasesGradient() t.Tensor  { return nil }
+
+func PoolingFromParams(params map[string]interface{}) (Layer, error) {
+
+  poolType, ok := params["pool_type"].(string)
+  if !ok {
+    return nil, errors.New("missing or invalid 'pool_type' parameter")
+  }
+
+  kernelSizeInterface, ok := params["kernel_size"].([]interface{})
+  if !ok {
+    return nil, errors.New("missing or invalid 'kernel_size' parameter")
+  }
+
+  kernelSized, err := interfaceToIntArray(kernelSizeInterface)
+  if err != nil {
+    return nil, err
+  }
+
+  kernelSize := [2]int{kernelSized[0], kernelSized[1]}
+
+
+  stridesInterface, ok := params["kernel_size"].([]interface{})
+  if !ok {
+    return nil, errors.New("missing or invalid 'kernel_size' parameter")
+  }
+
+  stride, err := interfaceToIntArray(stridesInterface)
+  if err != nil {
+    return nil, err
+  }
+
+  strides := [2]int{stride[0], stride[1]}
+
+  mode, ok := params["mode"].(string)
+  if !ok {
+    return nil, errors.New("missing or invalid 'mode' parameter")
+  }
+
+  return &Pooling{
+    PoolType: PoolingType(poolType),
+    KernelSize: kernelSize,
+    Strides: strides,
+    Mode: PaddingMode(mode),
+  }, nil
+}

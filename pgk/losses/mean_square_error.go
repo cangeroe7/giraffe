@@ -7,9 +7,9 @@ import (
 	t "github.com/cangeroe7/giraffe/pgk/tensor"
 )
 
-type meanSquareError struct{}
+type MeanSquareError struct{}
 
-func (l *meanSquareError) CalcLoss(yTrue, yPred t.Tensor) (float64, error) {
+func (l *MeanSquareError) CalcLoss(yTrue, yPred t.Tensor) (float64, error) {
 	trueShape, predShape := yTrue.Shape(), yPred.Shape()
 	if len(trueShape) != len(predShape) {
 		for i := range trueShape {
@@ -26,7 +26,7 @@ func (l *meanSquareError) CalcLoss(yTrue, yPred t.Tensor) (float64, error) {
   return avg, nil
 }
 
-func (l *meanSquareError) Accuracy(yTrue, yPred t.Tensor) (float64, error) {
+func (l *MeanSquareError) Accuracy(yTrue, yPred t.Tensor) (float64, error) {
 	round := func(x float64) (float64, error) {
 		return math.Round(x), nil
 	}
@@ -46,7 +46,7 @@ func (l *meanSquareError) Accuracy(yTrue, yPred t.Tensor) (float64, error) {
 	return sum / float64(predicted.Size()), nil
 }
 
-func (l *meanSquareError) Gradient(yTrue, yPred t.Tensor) (t.Tensor, error) {
+func (l *MeanSquareError) Gradient(yTrue, yPred t.Tensor) (t.Tensor, error) {
 	trueShape, predShape := yTrue.Shape(), yPred.Shape()
 	if len(trueShape) != len(predShape) {
 		for i := range trueShape {

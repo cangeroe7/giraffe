@@ -9,7 +9,7 @@ import (
 )
 
 type Number interface {
-  int | float64
+	int | float64
 }
 
 type Tensor interface {
@@ -24,7 +24,7 @@ type Tensor interface {
 	DataCopy() []float64
 	ValueAt(index int) float64
 	SetValueAt(index int, value float64) error
-  AddValueAt(index int, value float64) error
+	AddValueAt(index int, value float64) error
 
 	// Stuff Like Transpose
 	Transpose(inPlace bool) Tensor
@@ -36,10 +36,12 @@ type Tensor interface {
 
 	// Operations
 	RepAdd(other Tensor, inPlace bool) (Tensor, error)
+	RepMultiply(other Tensor, inPlace bool) (Tensor, error)
 	Add(other Tensor, inPlace bool) (Tensor, error)
 	Subtract(other Tensor, inPlace bool) (Tensor, error)
 	Multiply(other Tensor, inPlace bool) (Tensor, error)
 	Divide(other Tensor, inPlace bool) (Tensor, error)
+	AddMatrix(other Tensor) error
 
 	ScalarAdd(x float64, inPlace bool) Tensor
 	ScalarSubtract(x float64, inPlace bool) Tensor
@@ -55,17 +57,26 @@ type Tensor interface {
 	MinIndex() int
 	AvgIndex() int
 
+	ArgMax(axis int) ([]int, error)
+
 	AxisSum(axis int) (Tensor, error)
 
 	Pad(pads ...int) (Tensor, error)
-	Tile(reps []int) (Tensor, error)
+	Trim(trim_sizes ...int) (Tensor, error)
+	Tile(reps_rows, reps_cols int) (Tensor, error)
+	Dilate(rows, cols int) (Tensor, error)
+	Normalize() error
+	OneHotEncode(size int) (Tensor, error)
 
 	// Linear Operations
 	MatMul(other Tensor) (Tensor, error)
 
-	CrossCorrelate(other Tensor, strides [2]int, resTen Tensor) (Tensor, error)
+	CrossCorrelate(kernels Tensor, strides [2]int, resTen Tensor) (Tensor, error)
+	Convolve(kernels Tensor, strides [2]int, resTen Tensor) (Tensor, error)
 
+	Slice(start, end int) (Tensor, error)
 	RegionSlice(startRow, startCol, numRows, numCols int) (Tensor, []int, error)
+	BatchSlice(startBatch, endBatch int) (Tensor, error)
 
 	Print()
 }
@@ -143,72 +154,130 @@ func Identity(n int) (Tensor, error) {
 		return nil, errors.New("Cannot have identity less than or equal to zero")
 	}
 
-	resTen := tensor{TShape: []int{n, n}, Data: make([]float64, n*n)}
-
+	resTen := ZerosTensor([]int{n, n})
 	for i := 0; i < n*n; i += n + 1 {
-		resTen.Data[i] = 1.0
+		resTen.SetValueAt(i, 1.0)
 	}
 
-	return &resTen, nil
+	return resTen, nil
 }
 
 func (t *tensor) CrossCorrelate(kernels Tensor, strides [2]int, resTen Tensor) (Tensor, error) {
+	// Check that the input tensor and kernels have the same number of channels
 	if t.Shape().Channels() != kernels.Shape().Channels() {
 		return nil, errors.New("input doesn't have the same amount of channels as filters")
 	}
 
 	kRows, kCols := kernels.Shape().Rows(), kernels.Shape().Cols()
 
+	// Calculate output dimensions
 	outRows := (t.Shape().Rows()-kRows)/strides[0] + 1
 	outCols := (t.Shape().Cols()-kCols)/strides[1] + 1
 
+	// Create or check result tensor dimensions
 	outShape := []int{outRows, outCols}
-
 	if resTen == nil {
-		resTen = ZerosTensor([]int{outRows, outCols})
-	} else {
-		if !resTen.Shape().Eq(outShape) {
-			return nil, errors.New("resTen doesn't have right dimensions to put output of cross correlation in")
-		}
+		resTen = ZerosTensor(outShape)
+	} else if !resTen.Shape().Eq(outShape) {
+		return nil, errors.New("resTen doesn't have right dimensions to hold cross correlation result")
 	}
 
-	kernelIter, err := IterFromTensor(kernels, "mat")
-	if err != nil {
-		return nil, err
-	}
+	// Access tensor data references
+	matData := *t.data()
+	kernelData := *kernels.data()
+	resData := *resTen.data()
 
-	matIter, err := IterFromTensor(t, "mat")
-	if err != nil {
-		return nil, err
-	}
+	// Iterate through the input tensor
+	for i := 0; i < outRows; i++ {
+		for j := 0; j < outCols; j++ {
+			sum := 0.0
 
-	for mat, ok := matIter.Next(); ok; mat, ok = matIter.Next() {
-		kernel, ok := kernelIter.Next()
-		if !ok {
-			return nil, errors.New("this isn't supposed to happen")
-		}
-
-		matData := *mat.data()
-		kernelData := *kernel.data()
-		resData := *resTen.data()
-
-		for i := 0; i < outRows; i++ {
-			for j := 0; j < outCols; j++ {
-				sum := 0.0
-
-				// Calculate the kernel
-				for ki := 0; ki < kRows; ki++ {
-					for kj := 0; kj < kCols; kj++ {
-						matRow := i*strides[0] + ki
-						matCol := j*strides[1] + kj
-						matIndex := matRow*outCols + matCol
-						kIndex := ki*kCols + kj
-						sum += matData[matIndex] * kernelData[kIndex]
-					}
+			// Cross-correlation operation
+			for ki := 0; ki < kRows; ki++ {
+				for kj := 0; kj < kCols; kj++ {
+					matRow := i*strides[0] + ki
+					matCol := j*strides[1] + kj
+					matIndex := matRow*t.Shape().Cols() + matCol
+					kIndex := ki*kCols + kj
+					sum += matData[matIndex] * kernelData[kIndex]
 				}
-				resData[i*outCols+j] += sum
 			}
+
+			// Assign the result
+			resData[i*outCols+j] += sum
 		}
+	}
+
+	return resTen, nil
+}
+
+func (t *tensor) Convolve(kernels Tensor, strides [2]int, resTen Tensor) (Tensor, error) {
+	// Check that the input tensor and kernels have the same number of channels
+	if t.Shape().Channels() != kernels.Shape().Channels() {
+		return nil, errors.New("input doesn't have the same amount of channels as filters")
+	}
+
+	kRows, kCols := kernels.Shape().Rows(), kernels.Shape().Cols()
+
+	// Calculate output dimensions
+	outRows := (t.Shape().Rows()-kRows)/strides[0] + 1
+	outCols := (t.Shape().Cols()-kCols)/strides[1] + 1
+
+	// Create or check result tensor dimensions
+	outShape := []int{outRows, outCols}
+	if resTen == nil {
+		resTen = ZerosTensor(outShape)
+	} else if !resTen.Shape().Eq(outShape) {
+		return nil, errors.New("resTen doesn't have right dimensions to hold convolution result")
+	}
+
+	// Access tensor data references
+	matData := *t.data()
+	kernelData := *kernels.data()
+	resData := *resTen.data()
+
+	// Iterate through the input tensor
+	for i := 0; i < outRows; i++ {
+		for j := 0; j < outCols; j++ {
+			sum := 0.0
+
+			// Convolution operation (kernel is flipped)
+			for ki := 0; ki < kRows; ki++ {
+				for kj := 0; kj < kCols; kj++ {
+					matRow := i*strides[0] + ki
+					matCol := j*strides[1] + kj
+					matIndex := matRow*t.Shape().Cols() + matCol
+
+					// Kernel is flipped for convolution
+					kIndex := (kRows-1-ki)*kCols + (kCols - 1 - kj)
+					sum += matData[matIndex] * kernelData[kIndex]
+				}
+			}
+			// Assign the result
+			resData[i*outCols+j] += sum
+		}
+	}
+
+	return resTen, nil
+}
+
+func (t *tensor) Slice(start, end int) (Tensor, error) {
+	switch {
+	case start >= end:
+		return nil, errors.New("batchslice: end is less than or equal to start")
+
+	case start < 0 || end < 0:
+		return nil, errors.New("batchslice: points cannot be negative")
+
+	case end >= t.Shape().TotalSize():
+		return nil, errors.New("batchslice: end point out of range")
+	}
+
+	data := t.Data[start:end]
+
+	resTen, err := TensorFrom([]int{1, len(data)}, data)
+	if err != nil {
+		return nil, err
 	}
 
 	return resTen, nil
@@ -229,7 +298,7 @@ func (t *tensor) RegionSlice(startRow, startCol, numRows, numCols int) (Tensor, 
 	}
 
 	data := make([]float64, 0, numRows*numCols)
-  indeces := make([]int, 0, numRows*numCols)
+	indeces := make([]int, 0, numRows*numCols)
 
 	for i := 0; i < numRows; i++ {
 
@@ -238,7 +307,7 @@ func (t *tensor) RegionSlice(startRow, startCol, numRows, numCols int) (Tensor, 
 
 		for i := startIdx; i < endIdx; i++ {
 			data = append(data, t.ValueAt(i))
-      indeces = append(indeces, i)
+			indeces = append(indeces, i)
 		}
 	}
 
@@ -248,37 +317,95 @@ func (t *tensor) RegionSlice(startRow, startCol, numRows, numCols int) (Tensor, 
 	return resMat, indeces, nil
 }
 
+func (t *tensor) BatchSlice(startBatch, endBatch int) (Tensor, error) {
+	switch {
+	case startBatch >= endBatch:
+		return nil, errors.New("end is less than or equal to start")
+
+	case startBatch < 0 || endBatch < 0:
+		return nil, errors.New("points cannot be negative")
+
+  
+	case endBatch >= t.Shape().Batches():
+		return nil, errors.New("end point out of range")
+	}
+
+	startIdx := startBatch * t.Strides()[0]
+	endIdx := endBatch * t.Strides()[0]
+
+	newShape := []int{endBatch - startBatch, t.Shape().Channels(), t.Shape().Rows(), t.Shape().Cols()}
+
+	newData := t.Data[startIdx:endIdx]
+
+	resTen, err := TensorFrom(newShape, newData)
+	if err != nil {
+		return nil, err
+	}
+
+	return resTen, nil
+}
 func (t *tensor) Transpose(inPlace bool) Tensor {
-	if !t.Shape().IsMatrix() {
-		return nil
+
+	matrixIter, _ := IterFromTensor(t, "matrix")
+
+	result := make([]float64, 0, t.Shape().TotalSize())
+	for matrix, ok := matrixIter.Next(); ok; matrix, ok = matrixIter.Next() {
+		result = append(result, subTranspose(matrix.data(), t.Shape().Rows(), t.Shape().Cols())...)
 	}
 
-	transposed := make([]float64, len(t.Data))
-
-	rows := t.TShape[0]
-	cols := t.TShape[1]
-
-	for i := 0; i < rows; i++ {
-		for j := 0; j < cols; j++ {
-			transposed[j*rows+i] = t.Data[i*cols+j]
-		}
-	}
+	newShape := t.Shape().Clone()
+	newShape[len(newShape)-2], newShape[len(newShape)-1] = newShape[len(newShape)-1], newShape[len(newShape)-2]
 
 	if inPlace {
-		t.Data = transposed
-		t.TShape.Transpose()
+		t.Data = result
+		t.Reshape(newShape)
 		return t
 	}
 
-	return &tensor{TShape: t.Shape().Clone().Transpose(), Data: transposed}
+	resTen, _ := TensorFrom(newShape, result)
+
+	return resTen
+}
+
+func subTranspose(matrix *[]float64, rows, cols int) []float64 {
+
+	transposed := make([]float64, rows*cols)
+
+	for i := 0; i < rows; i++ {
+		for j := 0; j < cols; j++ {
+			transposed[j*rows+i] = (*matrix)[i*cols+j]
+		}
+	}
+
+	return transposed
 }
 
 func (t *tensor) Reshape(shape Shape) error {
-	if t.Shape().TotalSize() != shape.TotalSize() {
-		return errors.New("Cannot reshape when totalSizes are not the same")
+	for _, val := range shape {
+		if val <= 0 {
+			return errors.New("Dimensions cannot be negative")
+		}
 	}
 
-	t.TShape = shape
+	if t.Shape().TotalSize()%shape.TotalSize() != 0 {
+		return errors.New("Cannot reshape when totalSizes are not the same")
+	}
+	switch len(shape) {
+	case 0, 1:
+		return errors.New("must have atleast a matrix input")
+
+	case 2:
+		t.TShape = []int{t.Shape().TotalSize() / shape.TotalSize(), 1, shape[0], shape[1]}
+
+	case 3:
+		t.TShape = []int{t.Shape().TotalSize() / shape.TotalSize(), shape[0], shape[1], shape[2]}
+
+	case 4:
+		t.TShape = shape
+
+	default:
+		return errors.New("Invalid shape length")
+	}
 
 	return nil
 }
@@ -303,9 +430,53 @@ func (t *tensor) RepAdd(other Tensor, inPlace bool) (Tensor, error) {
 	shape := t.Shape()
 	otherShape := other.Shape()
 
-	for i := range shape[0] {
-		for j := range shape[1] {
-			resTen.Data[i*shape[1]+j] = t.Data[i*shape[1]+j] + otherData[i%otherShape[0]*otherShape[1]+j%otherShape[1]]
+	bats, chas, rows, cols := shape.Batches(), shape.Channels(), shape.Rows(), shape.Cols()
+	oBats, oChs, oRows, oCols := otherShape.Batches(), otherShape.Channels(), otherShape.Rows(), otherShape.Cols()
+
+	for b := range bats {
+		resBatch := b * chas * rows * cols
+		otherBatch := (b % oBats) * oChs * oRows * oCols
+		for c := range chas {
+			resChannel := c * rows * cols
+			otherChannel := (c % oChs) * oRows * oCols
+			for i := range rows {
+				resRow := i * cols
+				otherRow := (i % oRows) * oCols
+				for j := range cols {
+					resIdx := resBatch + resChannel + resRow + j
+					otherIdx := otherBatch + otherChannel + otherRow + j%oCols
+					resTen.Data[resIdx] = t.Data[resIdx] + otherData[otherIdx]
+				}
+			}
+		}
+	}
+
+	return &resTen, nil
+}
+
+func (t *tensor) RepMultiply(other Tensor, inPlace bool) (Tensor, error) {
+
+	if other.Dims() == 0 {
+		return nil, errors.New("other tensor has no dimension")
+	}
+
+	var resTen tensor
+	switch inPlace {
+	case true:
+		resTen = *t
+
+	case false:
+		resTen = tensor{TShape: t.Shape().Clone(), Data: make([]float64, len(t.Data))}
+	}
+
+	otherData := *other.data()
+
+	shape := t.Shape()
+	otherShape := other.Shape()
+
+	for i := range shape.Rows() {
+		for j := range shape.Cols() {
+			resTen.Data[i*shape.Cols()+j] = t.Data[i*shape.Cols()+j] * otherData[i%otherShape.Rows()*otherShape.Cols()+j%otherShape.Cols()]
 		}
 	}
 
@@ -394,6 +565,26 @@ func (t *tensor) Divide(other Tensor, inPlace bool) (Tensor, error) {
 	}
 
 	return &resTen, nil
+}
+
+func (t *tensor) AddMatrix(other Tensor) error {
+	if !other.Shape().IsMatrix() {
+		return errors.New("cannot add non matrix")
+	}
+
+	if len(t.Shape()) != 4 {
+		return errors.New("cannot add if tensor doesn't ahve batches")
+	}
+
+	if other.Shape().TotalSize() != t.TShape.Rows()*t.TShape.Cols() {
+		return errors.New("matrix sizes not the same size")
+	}
+
+	t.Data = append(t.Data, *other.data()...)
+
+	t.TShape[0] += 1
+
+	return nil
 }
 
 func (t *tensor) Map(fn func(float64) (float64, error), inPlace bool) (Tensor, error) {
@@ -542,7 +733,7 @@ func (t *tensor) Min() float64 {
 	}
 	min := t.Data[0]
 	for i := 0; i < len(t.Data); i++ {
-		if t.Data[i] > min {
+		if t.Data[i] < min {
 			min = t.Data[i]
 		}
 	}
@@ -569,11 +760,11 @@ func (t *tensor) MaxIndex() int {
 		return -1
 	}
 	max := t.Data[0]
-  maxIdx := 0
+	maxIdx := 0
 	for i := 0; i < len(t.Data); i++ {
 		if t.Data[i] > max {
 			max = t.Data[i]
-      maxIdx = i
+			maxIdx = i
 		}
 	}
 
@@ -584,11 +775,11 @@ func (t *tensor) MinIndex() int {
 		return -1
 	}
 	min := t.Data[0]
-  minIdx := 0
+	minIdx := 0
 	for i := 0; i > len(t.Data); i++ {
 		if t.Data[i] > min {
 			min = t.Data[i]
-      minIdx = i
+			minIdx = i
 		}
 	}
 
@@ -600,22 +791,162 @@ func (t *tensor) AvgIndex() int {
 		return -1
 	}
 	avg := t.Data[0]
-  avgIdx := 0
+	avgIdx := 0
 	for i := 0; i < len(t.Data); i++ {
 		if t.Data[i] > avg {
 			avg = t.Data[i]
-      avgIdx = i
+			avgIdx = i
 		}
 	}
 
 	return avgIdx
 }
 
-func (t *tensor) Tile(reps []int) (Tensor, error) {
+func (t *tensor) ArgMax(axis int) ([]int, error) {
+	if axis > 1 || axis < 0 {
+		return nil, errors.New("Axis not 1 or 0")
+	}
 
-	return nil, nil
+	if axis == 0 {
+		t.Transpose(true)
+	}
+
+	result := make([]int, 0, t.Shape().Rows())
+
+	rowIter, err := IterFromTensor(t, "rows")
+	if err != nil {
+		return nil, err
+	}
+
+	for row, ok := rowIter.Next(); ok; row, ok = rowIter.Next() {
+		maxIndex := row.MaxIndex()
+		result = append(result, maxIndex)
+	}
+
+	if axis == 0 {
+		t.Transpose(true)
+	}
+
+	return result, nil
 }
 
+func (t *tensor) Tile(reps_rows, reps_cols int) (Tensor, error) {
+	if reps_rows == 0 || reps_cols == 0 {
+		return t, nil
+	}
+
+	newShape := t.Shape().Clone()
+	newShape[len(newShape)-2] *= reps_rows
+	newShape[len(newShape)-1] *= reps_cols
+
+	resTen := ZerosTensor(newShape)
+
+	resMatrixIter, err := IterFromTensor(resTen, "matrix")
+	if err != nil {
+		return nil, err
+	}
+
+	inputMatrixIter, err := IterFromTensor(t, "matrix")
+	if err != nil {
+		return nil, err
+	}
+
+	for resMatrix, ok := resMatrixIter.Next(); ok; resMatrix, ok = resMatrixIter.Next() {
+		inputMatrix, _ := inputMatrixIter.Next()
+
+		inputData := *inputMatrix.data()
+		resData := *resMatrix.data()
+
+		for i := range newShape.Rows() {
+			for j := range newShape.Cols() {
+				inputRow := i % inputMatrix.Shape().Rows()
+				inputCol := j % inputMatrix.Shape().Cols()
+				inputIdx := inputRow*inputMatrix.Shape().Cols() + inputCol
+
+				resData[i*newShape.Cols()+j] = inputData[inputIdx]
+			}
+		}
+	}
+
+	return resTen, nil
+}
+
+func (t *tensor) Dilate(rows, cols int) (Tensor, error) {
+
+	if rows < 0 || cols < 0 {
+		return nil, errors.New("dilate: dimensions cannot be negative")
+	}
+
+	if rows == 0 && cols == 0 {
+		return t, nil
+	}
+
+	newHeight := t.Shape().Rows()*(rows+1) - rows
+	newWidth := t.Shape().Cols()*(cols+1) - cols
+	newShape := []int{t.Shape().Batches(), t.Shape().Channels(), newHeight, newWidth}
+
+	resTen := ZerosTensor(newShape)
+
+	resMatIter, err := IterFromTensor(resTen, "matrix")
+	if err != nil {
+		return nil, err
+	}
+
+	dataMatIter, err := IterFromTensor(t, "matrix")
+	if err != nil {
+		return nil, err
+	}
+
+	for dataMat, ok := dataMatIter.Next(); ok; dataMat, ok = dataMatIter.Next() {
+		resMat, _ := resMatIter.Next()
+
+		resMatData := *(resMat.data())
+		for i := range dataMat.Shape().Rows() {
+			for j := range dataMat.Shape().Cols() {
+				resMatData[i*resMat.Shape().Cols()*rows+j*cols] = t.Data[i*dataMat.Shape().Cols()+j]
+			}
+		}
+
+	}
+
+	return resTen, nil
+}
+
+func (t *tensor) Normalize() error {
+
+	t.Transpose(true)
+
+	rowIter, err := IterFromTensor(t, "rows")
+	if err != nil {
+		return err
+	}
+
+	for row, ok := rowIter.Next(); ok; row, ok = rowIter.Next() {
+		minVal := row.Min()
+		maxVal := row.Max()
+
+		if minVal == maxVal {
+			row.ScalarMultiply(0.0, true)
+			continue
+		}
+
+		row.ScalarSubtract(minVal, true)
+		row.ScalarDivide(maxVal-minVal, true)
+	}
+
+	t.Transpose(true)
+
+	return nil
+}
+
+func (t *tensor) OneHotEncode(size int) (Tensor, error) {
+	resTen := ZerosTensor([]int{t.Shape().Rows(), size})
+	for i, val := range t.Data {
+		resTen.SetValueAt(i*size+int(val), 1.0)
+	}
+
+	return resTen, nil
+}
 func (t *tensor) AxisSum(axis int) (Tensor, error) {
 	if !t.Shape().IsMatrix() {
 		return nil, errors.New("AxisSum() only implemented for matrices")
@@ -624,19 +955,19 @@ func (t *tensor) AxisSum(axis int) (Tensor, error) {
 	var resVec tensor
 	switch axis {
 	case 0:
-		cols, _ := t.Shape().DimSize(1)
+		cols := t.Shape().Cols()
 		resVec = tensor{TShape: []int{1, cols}, Data: make([]float64, cols)}
 		t.Transpose(true)
 
 	case 1:
-		rows, _ := t.Shape().DimSize(0)
+		rows := t.Shape().Rows()
 		resVec = tensor{TShape: []int{rows, 1}, Data: make([]float64, rows)}
 
 	default:
 		return nil, errors.New("Invalid axis choice chooses 0: for the sum of all the columns, and 1: for the sum of all the rows")
 	}
 
-	cols, _ := t.Shape().DimSize(1)
+	cols := t.Shape().Cols()
 	for i := 0; i < t.Size(); i++ {
 		resVec.Data[i/cols] += t.Data[i]
 	}
@@ -704,6 +1035,74 @@ func (t *tensor) Pad(pads ...int) (Tensor, error) {
 
 			for j := 0; j < mat.Shape().Cols(); j++ {
 				resTenData[(i+T)*resMat.Shape().Cols()+j+L] = Data[i*mat.Shape().Cols()+j]
+			}
+		}
+	}
+
+	return resTen, nil
+}
+
+func (t *tensor) Trim(trim_sizes ...int) (Tensor, error) {
+
+	for _, trim := range trim_sizes {
+		if trim < 0 {
+			return nil, errors.New("negative padding value given")
+		}
+	}
+
+	var T, R, B, L int
+	switch len(trim_sizes) {
+	case 1:
+		T, B, L, R = trim_sizes[0], trim_sizes[0], trim_sizes[0], trim_sizes[0]
+
+	case 2:
+		T, B, L, R = trim_sizes[0], trim_sizes[0], trim_sizes[1], trim_sizes[1]
+
+	case 3:
+		T, L, R, B = trim_sizes[0], trim_sizes[1], trim_sizes[1], trim_sizes[2]
+
+	case 4:
+		T, R, B, L = trim_sizes[0], trim_sizes[1], trim_sizes[2], trim_sizes[3]
+
+	default:
+		return t, errors.New("Incorrect amount of padding vals given")
+	}
+
+	if T+R+B+L == 0 {
+		return t, nil
+	}
+
+	trimmedShape := t.Shape().Clone()
+	trimmedShape[len(trimmedShape)-1] -= L + R
+	trimmedShape[len(trimmedShape)-2] -= T + B
+
+	if trimmedShape[len(trimmedShape)-1] <= 0 || trimmedShape[len(trimmedShape)-2] <= 0 {
+		return nil, errors.New("Trimmed shape must stay positive")
+	}
+
+	resTen := ZerosTensor(trimmedShape)
+	resMatrixIter, err := IterFromTensor(resTen, "channel")
+	if err != nil {
+		return nil, err
+	}
+
+	inputMatrixIter, err := IterFromTensor(t, "channel")
+	if err != nil {
+		return nil, err
+	}
+
+	for inputMatrix, ok := inputMatrixIter.Next(); ok; inputMatrix, ok = inputMatrixIter.Next() {
+		resMatrix, ok := resMatrixIter.Next()
+		if !ok {
+			return nil, errors.New("Shouldn't be possible, but result matrix iterator ran out of matrices before tensor")
+		}
+
+		inputData := *inputMatrix.data()
+		resData := *resMatrix.data()
+		for i := T; i < resMatrix.Shape().Rows(); i++ {
+
+			for j := L; j < resMatrix.Shape().Cols(); j++ {
+				resData[(i+T)*resMatrix.Shape().Cols()+j+L] = inputData[i*inputMatrix.Shape().Cols()+j]
 			}
 		}
 	}
@@ -825,18 +1224,19 @@ func (t *tensor) MatMul(other Tensor) (Tensor, error) {
 		return nil, errors.New("Not both matrices")
 	}
 
-	if t.Shape()[1] != other.Shape()[0] {
+	if t.Shape().Cols() != other.Shape().Rows() {
 		return nil, errors.New("matrices dimensions not compatible for matrix multiplication")
 	}
 
 	tData := t.data()
 	oData := other.data()
 
-	m := t.Shape().Clone()[0]     // Height of first matrix
-	n := t.Shape().Clone()[1]     // Width of first matrix, height of second matrix
-	p := other.Shape().Clone()[1] // Width of second matrix
+	m := t.Shape().Clone().Rows()     // Height of first matrix
+	n := t.Shape().Clone().Cols()     // Width of first matrix, height of second matrix
+	p := other.Shape().Clone().Cols() // Width of second matrix
 
-	resTen := tensor{TShape: []int{m, p}, Data: make([]float64, m*p)}
+	resTen := ZerosTensor([]int{m, p})
+	resTenData := *resTen.data()
 
 	other.Transpose(true)
 
@@ -853,7 +1253,7 @@ func (t *tensor) MatMul(other Tensor) (Tensor, error) {
 				for k := range n {
 					sum += (*tData)[IxN+k] * (*oData)[JxN+k]
 				}
-				resTen.Data[IxP+j] = sum
+				resTenData[IxP+j] = sum
 			}
 		}(i)
 	}
@@ -861,10 +1261,46 @@ func (t *tensor) MatMul(other Tensor) (Tensor, error) {
 
 	other.Transpose(true)
 
-	return &resTen, nil
+	return resTen, nil
 }
 
 func Add(t_1, t_2 Tensor, inPlace bool) (Tensor, error) {
 	return nil, nil
 
+}
+
+func Shuffle(x, y Tensor) error {
+	n := x.Shape().Batches()
+	for i := n - 1; i > 0; i-- {
+		j := rand.Intn(i + 1)
+
+		xBatchI, err := x.BatchSlice(i, i+1)
+		if err != nil {
+			return nil
+		}
+
+		xBatchJ, err := x.BatchSlice(j, j+1)
+		if err != nil {
+			return err
+		}
+
+		xBatchIData := xBatchI.DataCopy()
+		copy(*xBatchI.data(), *xBatchJ.data())
+		copy(*xBatchJ.data(), xBatchIData)
+
+		yBatchI, err := y.BatchSlice(i, i+1)
+		if err != nil {
+			return nil
+		}
+
+		yBatchJ, err := y.BatchSlice(j, j+1)
+		if err != nil {
+			return err
+		}
+
+		yBatchIData := yBatchI.DataCopy()
+		copy(*yBatchI.data(), *yBatchJ.data())
+		copy(*yBatchJ.data(), yBatchIData)
+	}
+	return nil
 }
